@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.30 local-only</title>
+<title>Icarus — Pet Pedigree & Breeding Board — V0.31 local-only</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -111,6 +111,8 @@ svg{display:block;min-width:100%;}
 .node:hover rect.body{filter:brightness(1.15);stroke-width:2}
 .node.selected rect.body{stroke:#e5eef5;stroke-width:2.5}
 .node.sibling-peer{filter:drop-shadow(0 0 2px rgba(214,185,120,.60)) drop-shadow(0 0 6px rgba(214,185,120,.25))}
+.node.search-muted{opacity:.16}
+.node.search-match .name{fill:#fff3c9}
 .stats{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin:15px 0}
 .stat{text-align:center;border:1px solid var(--border);background:var(--card);border-radius:3px;padding:7px 2px}
 .stat b{display:block;font-size:16px;margin-top:2px}
@@ -170,7 +172,7 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.30 LOCAL</span></h1>
+    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.31 LOCAL</span></h1>
     <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
   </div>
   <div class="badges">
@@ -348,9 +350,10 @@ function mergeManualOrder(descriptors,savedOrder,compare){
   return [...ordered,...[...byKey.values()].sort(compare)];
 }
 
-function firstLayoutNodeId(layout){
+function firstLayoutNodeId(layout,allowedIds=null){
   if(!layout?.pos?.size)return null;
   return [...layout.pos.entries()]
+    .filter(([id])=>!allowedIds||allowedIds.has(id))
     .sort(([,a],[,b])=>a.y-b.y||a.x-b.x)[0]?.[0]||null;
 }
 
@@ -381,7 +384,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.30 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// V0.31 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -599,14 +602,14 @@ function viewNodes(view=activeView,speciesKey=currentSpecies){
 }
 
 function getVisibleNodes(){
-  let list=viewNodes(activeView,currentSpecies);
-  const q=search.value.trim().toLowerCase();
-  if(q){
-    list=list.filter(n=>[
-      n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.icarus_uid??''),String(n.level??''),String(n.experience??'')
-    ].join(' ').toLowerCase().includes(q));
-  }
-  return list;
+  return viewNodes(activeView,currentSpecies);
+}
+
+function nodeMatchesSearch(n,query=search.value.trim().toLowerCase()){
+  if(!query)return true;
+  return [
+    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.icarus_uid??''),String(n.level??''),String(n.experience??'')
+  ].join(' ').toLowerCase().includes(query);
 }
 
 function computeGenerations(list){
@@ -900,9 +903,11 @@ function render({selectFirst=false}={}){
   breedingTableWrap.style.display='none';
   wrap.style.display='block';
   const list=getVisibleNodes();
+  const query=search.value.trim().toLowerCase();
+  const matchingIds=new Set(list.filter(node=>nodeMatchesSearch(node,query)).map(node=>node.id));
   viewTitle.textContent=activeViewLabel();
   desc.textContent=activeViewDescription();
-  countText.textContent=`${list.length} individuals / data points`;
+  countText.textContent=query?`${matchingIds.size} matches / ${list.length} individuals`:`${list.length} individuals / data points`;
   tree.innerHTML='';
   if(!list.length){
     if(selectFirst){
@@ -915,7 +920,10 @@ function render({selectFirst=false}={}){
     tree.appendChild(t); lastLayout=null; zoomLabel.textContent=`${Math.round(zoomScale*100)}%`; return;
   }
   const L=layoutNodes(list); lastLayout=L;
-  if(selectFirst)selected=firstLayoutNodeId(L);
+  if(selectFirst)selected=firstLayoutNodeId(L,query?matchingIds:null);
+  if(selectFirst&&query&&!selected){
+    detail.innerHTML='<div class="detail-placeholder">No pet matches the current search. The complete pedigree remains visible for context.</div>';
+  }
   const siblingIds=new Set(selected?(siblingsById.get(selected)||[]):[]);
   tree.setAttribute('viewBox',`0 0 ${L.width} ${L.height}`);
   applyZoom();
@@ -935,7 +943,8 @@ function render({selectFirst=false}={}){
 
   for(const n of list){
     const p=L.pos.get(n.id);
-    const g=svgEl('g',{class:`node ${activityClass(n)}${roleClass(n)}${selected===n.id?' selected':siblingIds.has(n.id)?' sibling-peer':''}`,transform:`translate(${p.x},${p.y})`,tabindex:'0',role:'button','aria-label':displayName(n)});
+    const searchClass=query?(matchingIds.has(n.id)?' search-match':' search-muted'):'';
+    const g=svgEl('g',{class:`node ${activityClass(n)}${roleClass(n)}${selected===n.id?' selected':siblingIds.has(n.id)?' sibling-peer':''}${searchClass}`,transform:`translate(${p.x},${p.y})`,tabindex:'0',role:'button','aria-label':displayName(n)});
     const rect=svgEl('rect',{class:'body',x:0,y:0,width:p.w,height:p.h});
     g.appendChild(rect);
     const sex=svgEl('text',{x:12,y:20,class:'sexmark',fill:n.sex==='F'?'#d8a3c2':n.sex==='M'?'#7eb5df':'#a7afb4'});
@@ -1664,7 +1673,7 @@ wrap.addEventListener('scroll',hideTooltip,{passive:true});
 window.addEventListener('blur',hideTooltip);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hideTooltip()});
 document.getElementById('clearBtn').addEventListener('click',()=>{selected=null;detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div>';render()});
-search.addEventListener('input',()=>{selected=null;render()});
+search.addEventListener('input',()=>{selected=null;render({selectFirst:true})});
 window.addEventListener('resize',()=>render());
 applyBoardEdits();updateCategoryNavigation();render();
 </script>
