@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.29 local-only</title>
+<title>Icarus — Pet Pedigree & Breeding Board — V0.30 local-only</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -20,24 +20,25 @@ h1{font-family:Georgia,'Times New Roman',serif;font-size:25px;margin:0 0 7px;fon
 .badge{border:1px solid #4d503f;border-radius:4px;padding:6px 10px;color:var(--muted);font-size:12px;white-space:nowrap;background:#202219}
 .toolbar{display:grid;grid-template-columns:minmax(230px,1fr) minmax(260px,2fr) auto;gap:12px;align-items:center;margin:16px 0}
 .tabs{display:flex;gap:7px;flex-wrap:wrap}
-.view-nav{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-top:8px}
-.view-nav>.tabs{flex:1}
+.category-zone{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px 10px;align-items:start;padding:8px 0;border-bottom:1px solid #35382e}
+.category-label{padding-top:8px;color:#908d7c;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
+.category-zone>.hidden-categories{grid-column:2}
+.view-nav{display:flex;align-items:flex-start;justify-content:flex-end;gap:14px;margin-top:8px}
 .tab{background:#1a1c17;color:var(--muted);border:1px solid var(--border);padding:8px 12px;border-radius:4px;cursor:pointer;font:inherit;font-size:13px}
 .tab.active{background:var(--card2);color:var(--text);border-color:#53616b}
-.species-tab{border-color:color-mix(in srgb,var(--species-color) 46%,#5a5844);border-left-width:4px;box-shadow:none;transition:.16s ease}
-.species-tab:hover{color:var(--text);border-color:var(--species-color);background:#272a21}
-.species-tab.active{border-color:var(--species-color);background:#303328;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--species-color) 18%,transparent)}
-.species-item{display:inline-flex;align-items:stretch;--species-color:#8b9b8b}
-.species-item[draggable="true"]{cursor:grab}
-.species-item.dragging{opacity:.42}
-.species-item.drag-over{outline:2px solid #c79a5e;outline-offset:3px;border-radius:4px}
-.species-item .species-tab{border-radius:4px 0 0 4px;border-right:0}
-.species-hide{width:27px;padding:0;border:1px solid color-mix(in srgb,var(--species-color) 46%,#5a5844);border-left-color:#555746;border-radius:0 4px 4px 0;background:#1a1c17;color:#8f8d7d;cursor:pointer;font-size:14px}
-.species-hide:hover{color:#f0d3ad;background:#35291d;border-color:#9c7046}
-.hidden-species{display:none;gap:7px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:9px 10px;border:1px dashed #555746;border-radius:5px;background:#181a15}
-.hidden-species.visible{display:flex}
-.restore-species{border:1px solid #5a5d4b;border-radius:4px;background:#24271f;color:#c8c4af;padding:6px 9px;cursor:pointer;font-size:11px}
-.restore-species:hover{border-color:#9a865b;color:#f4ecd7}
+.category-item{display:inline-flex;align-items:stretch;--category-color:#8b9b8b}
+.category-item[draggable="true"]{cursor:grab}
+.category-item.dragging{opacity:.42}
+.category-item.drag-over{outline:2px solid #c79a5e;outline-offset:3px;border-radius:4px}
+.category-item .category-tab{border-color:color-mix(in srgb,var(--category-color) 46%,#5a5844);border-left:4px solid var(--category-color);border-radius:4px 0 0 4px;border-right:0}
+.category-item .category-tab:hover{color:var(--text);border-color:var(--category-color);background:#272a21}
+.category-item .category-tab.active{color:var(--text);border-color:var(--category-color);background:#303328;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--category-color) 18%,transparent)}
+.category-hide{width:27px;padding:0;border:1px solid color-mix(in srgb,var(--category-color) 46%,#5a5844);border-left-color:#555746;border-radius:0 4px 4px 0;background:#1a1c17;color:#8f8d7d;cursor:pointer;font-size:14px}
+.category-hide:hover{color:#f0d3ad;background:#35291d;border-color:#9c7046}
+.hidden-categories{display:none;gap:7px;align-items:center;flex-wrap:wrap;padding:9px 10px;border:1px dashed #555746;border-radius:5px;background:#181a15}
+.hidden-categories.visible{display:flex}
+.restore-category{border:1px solid #5a5d4b;border-radius:4px;background:#24271f;color:#c8c4af;padding:6px 9px;cursor:pointer;font-size:11px}
+.restore-category:hover{border-color:#9a865b;color:#f4ecd7}
 .hidden-toggle{display:inline-flex}
 .view-tab{position:relative;border:0;border-bottom:2px solid var(--view-color);background:color-mix(in srgb,var(--view-color) 8%,#1a1c17);border-radius:4px 4px 1px 1px;overflow:hidden}
 .view-tab::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:var(--view-color);opacity:.7}
@@ -169,7 +170,7 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.29 LOCAL</span></h1>
+    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.30 LOCAL</span></h1>
     <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
   </div>
   <div class="badges">
@@ -181,10 +182,22 @@ svg{display:block;min-width:100%;}
   </div>
 </header>
 
-<div class="tabs" id="speciesTabs"></div>
-<div class="hidden-species" id="hiddenSpecies"></div>
+<div class="category-zone category-species">
+  <div class="category-label">Species</div>
+  <div class="tabs" id="speciesTabs"></div>
+  <div class="hidden-categories" id="hiddenSpecies"></div>
+</div>
+<div class="category-zone category-bloodlines">
+  <div class="category-label">Bloodlines</div>
+  <div class="tabs" id="bloodlineTabs"></div>
+  <div class="hidden-categories" id="hiddenBloodlines"></div>
+</div>
+<div class="category-zone category-foundations">
+  <div class="category-label">Foundations</div>
+  <div class="tabs" id="foundationTabs"></div>
+  <div class="hidden-categories" id="hiddenFoundations"></div>
+</div>
 <div class="view-nav">
-  <div class="tabs" id="tabs"></div>
   <div class="view-actions">
     <button class="tab" id="usefulConfigBtn" title="Choose which stats count toward the Useful score">Useful stats</button>
     <button class="tab" id="addRoleBtn" title="Create a custom pet role">+ Add role</button>
@@ -284,6 +297,74 @@ function descendantIdsFrom(founderId,childrenByParentId,accept=()=>true){
   return ids;
 }
 
+function classifyPetOrigin(pet){
+  const uid=Number(pet?.icarus_uid);
+  if(!Number.isFinite(uid)||uid<0||pet?.historical===true)return 'historical';
+  const hasParentUid=[pet?.mother_uid,pet?.father_uid]
+    .some(value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value)));
+  const hasParentName=[pet?.mother,pet?.father]
+    .some(value=>String(value||'').trim()!=='');
+  return hasParentUid||hasParentName?'bred':'wild';
+}
+
+function buildNavigationCatalog(nodes,childrenByParentId){
+  const species=new Map(),bloodlinesBySpecies=new Map(),foundationsBySpecies=new Map();
+  const nodeById=new Map(nodes.map(node=>[node.id,node]));
+  for(const node of nodes){
+    const speciesKey=node.species_key||'Unknown';
+    if(!species.has(speciesKey))species.set(speciesKey,{kind:'species',key:speciesKey,speciesKey,memberIds:new Set()});
+    species.get(speciesKey).memberIds.add(node.id);
+
+    if(!bloodlinesBySpecies.has(speciesKey))bloodlinesBySpecies.set(speciesKey,new Map());
+    const bloodline=node.bloodline||'Unknown';
+    const bloodlines=bloodlinesBySpecies.get(speciesKey);
+    if(!bloodlines.has(bloodline))bloodlines.set(bloodline,{kind:'bloodline',key:bloodline,speciesKey,memberIds:new Set()});
+    bloodlines.get(bloodline).memberIds.add(node.id);
+  }
+
+  for(const node of nodes){
+    if(node.originKind!=='wild'||node.historical||!Number.isFinite(node.icarus_uid)||node.icarus_uid<0)continue;
+    const speciesKey=node.species_key||'Unknown';
+    const branch=descendantIdsFrom(node.id,childrenByParentId,childId=>{
+      const child=nodeById.get(childId);
+      return child&&(child.species_key||'Unknown')===speciesKey;
+    });
+    branch.delete(node.id);
+    if(!branch.size)continue;
+    if(!foundationsBySpecies.has(speciesKey))foundationsBySpecies.set(speciesKey,new Map());
+    foundationsBySpecies.get(speciesKey).set(String(node.icarus_uid),{
+      kind:'foundation',key:String(node.icarus_uid),speciesKey,founderId:node.id,
+      descendantIds:branch,memberIds:new Set([node.id,...branch])
+    });
+  }
+  return {species,bloodlinesBySpecies,foundationsBySpecies};
+}
+
+function mergeManualOrder(descriptors,savedOrder,compare){
+  const byKey=new Map(descriptors.map(item=>[item.key,item]));
+  const ordered=[];
+  for(const key of Array.isArray(savedOrder)?savedOrder:[]){
+    if(byKey.has(key)){ordered.push(byKey.get(key));byKey.delete(key)}
+  }
+  return [...ordered,...[...byKey.values()].sort(compare)];
+}
+
+function firstLayoutNodeId(layout){
+  if(!layout?.pos?.size)return null;
+  return [...layout.pos.entries()]
+    .sort(([,a],[,b])=>a.y-b.y||a.x-b.x)[0]?.[0]||null;
+}
+
+function foundationVisibility(founder,hideInactive,manualHidden){
+  const autoHidden=!founder||(hideInactive&&!founder.breedingActive);
+  return {
+    autoHidden,
+    manualHidden:Boolean(manualHidden),
+    visible:!autoHidden&&!manualHidden,
+    restorable:!autoHidden&&Boolean(manualHidden)
+  };
+}
+
 function generationMap(list,nodeById){
   const ids=new Set(list.map(n=>n.id)),generations=new Map(),visiting=new Set();
   function generationOf(id){
@@ -301,16 +382,20 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.29 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// V0.30 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
+let navigationCatalog={species:new Map(),bloodlinesBySpecies:new Map(),foundationsBySpecies:new Map()};
 const tree = document.getElementById('tree');
 const wrap = document.getElementById('canvasWrap');
 const connectEmpty = document.getElementById('connectEmpty');
 const speciesTabsEl = document.getElementById('speciesTabs');
 const hiddenSpeciesEl = document.getElementById('hiddenSpecies');
-const tabsEl = document.getElementById('tabs');
+const bloodlineTabsEl = document.getElementById('bloodlineTabs');
+const hiddenBloodlinesEl = document.getElementById('hiddenBloodlines');
+const foundationTabsEl = document.getElementById('foundationTabs');
+const hiddenFoundationsEl = document.getElementById('hiddenFoundations');
 const breedingBtn = document.getElementById('breedingBtn');
 const detail = document.getElementById('detail');
 const tooltip = document.getElementById('tooltip');
@@ -329,7 +414,7 @@ const usefulChecks = document.getElementById('usefulChecks');
 const usefulConfigTitle = document.getElementById('usefulConfigTitle');
 const showInactiveBoardInput = document.getElementById('showInactiveBoard');
 const breedingCountHint = document.getElementById('breedingCountHint');
-let currentSpecies='', currentLineage='all', selected=null, lastLayout=null, zoomScale=1, hideInactive=false, showInactiveBreeding=false;
+let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=false,showInactiveBreeding=false;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function activityClass(n){return n.breedingActive?'active':'culled'}
@@ -415,40 +500,60 @@ const STAT_LABELS=['V','F','P','R','T','A','I'];
 const DEFAULT_USEFUL_MASK=[true,true,true,true,true,true,false];
 const PREFS_KEY='icarus_pedigree_preferences_v1';
 
+function normalizeCategoryBucket(value){
+  value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+  return {
+    order:Array.isArray(value.order)?value.order.map(String):[],
+    manualHidden:Array.isArray(value.manualHidden)?value.manualHidden.map(String):[]
+  };
+}
+
+function normalizePreferences(value){
+  value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+  const legacySpecies={order:value.speciesOrder,manualHidden:value.hiddenSpecies};
+  const navigation=value.navigation&&typeof value.navigation==='object'?value.navigation:{};
+  const perSpecies=source=>Object.fromEntries(Object.entries(source&&typeof source==='object'?source:{})
+    .map(([speciesKey,bucket])=>[speciesKey,normalizeCategoryBucket(bucket)]));
+  return {
+    usefulStats:value.usefulStats&&typeof value.usefulStats==='object'?value.usefulStats:{},
+    customRoles:Array.isArray(value.customRoles)?value.customRoles:[],
+    annotationVersion:Number(value.annotationVersion)||0,
+    navigation:{
+      species:normalizeCategoryBucket(navigation.species||legacySpecies),
+      bloodlines:perSpecies(navigation.bloodlines),
+      foundations:perSpecies(navigation.foundations)
+    }
+  };
+}
+
 function loadPreferences(){
-  const defaults={hiddenSpecies:[],speciesOrder:[],usefulStats:{},customRoles:[],annotationVersion:0};
   try{
     const saved=JSON.parse(localStorage.getItem(PREFS_KEY)||'null');
-    if(saved && typeof saved==='object')return {...defaults,...saved};
-    // One-time compatibility with the canonical V0.22 hidden-species choices.
-    defaults.hiddenSpecies=JSON.parse(localStorage.getItem('icarus_pedigree_hidden_species_v2')||'[]');
+    if(saved && typeof saved==='object')return normalizePreferences(saved);
+    return normalizePreferences({hiddenSpecies:JSON.parse(localStorage.getItem('icarus_pedigree_hidden_species_v2')||'[]')});
   }catch{}
-  return defaults;
+  return normalizePreferences({});
 }
 
 const preferences=loadPreferences();
-let hiddenSpecies=new Set(Array.isArray(preferences.hiddenSpecies)?preferences.hiddenSpecies:[]);
-let hiddenSpeciesPanelOpen=false;
 
 function savePreferences(){
-  preferences.hiddenSpecies=[...hiddenSpecies];
   localStorage.setItem(PREFS_KEY,JSON.stringify(preferences));
   markUserDataDirty();
 }
 
 function allSpeciesKeys(){
-  const counts=new Map();
-  for(const n of DATA.nodes){
-    const key=nodeSpeciesKey(n);
-    counts.set(key,(counts.get(key)||0)+1);
-  }
-  const defaults=[...counts].sort((a,b)=>b[1]-a[1]||speciesLabel(a[0]).localeCompare(speciesLabel(b[0]))).map(([key])=>key);
-  const saved=Array.isArray(preferences.speciesOrder)?preferences.speciesOrder:[];
-  return [...saved.filter(key=>counts.has(key)),...defaults.filter(key=>!saved.includes(key))];
+  const descriptors=[...navigationCatalog.species.values()];
+  return mergeManualOrder(descriptors,preferences.navigation.species.order,(a,b)=>
+    b.memberIds.size-a.memberIds.size||speciesLabel(a.key).localeCompare(speciesLabel(b.key),'en'))
+    .map(item=>item.key);
 }
 
 function defaultSpeciesKey(){return speciesKeys()[0]||''}
-function speciesKeys(){return allSpeciesKeys().filter(key=>!hiddenSpecies.has(key))}
+function speciesKeys(){
+  const hidden=new Set(preferences.navigation.species.manualHidden);
+  return allSpeciesKeys().filter(key=>!hidden.has(key));
+}
 
 function usefulMask(speciesKey=currentSpecies){
   const mask=preferences.usefulStats?.[speciesKey];
@@ -471,15 +576,12 @@ function currentSpeciesNodes(){
   return DATA.nodes.filter(n=>nodeSpeciesKey(n)===currentSpecies);
 }
 
-function speciesViewNodes(viewId,speciesKey=currentSpecies){
+function viewNodes(view=activeView,speciesKey=currentSpecies){
   const full=DATA.nodes.filter(n=>nodeSpeciesKey(n)===speciesKey);
-  const visible=hideInactive?full.filter(n=>n.breedingActive):full;
-  if(viewId==='all' || viewId==='breeding')return visible;
-
-  if(viewId.startsWith('lineage:')){
-    const lineage=decodeURIComponent(viewId.slice(8));
-    const ids=new Set(full.filter(n=>(n.bloodline||'Unknown')===lineage).map(n=>n.id));
-    // Keep ancestry context so pedigree edges remain meaningful.
+  let ids=new Set(full.map(n=>n.id));
+  if(view.kind==='bloodline'){
+    const descriptor=navigationCatalog.bloodlinesBySpecies.get(speciesKey)?.get(view.key);
+    ids=new Set(descriptor?.memberIds||[]);
     let changed=true;
     while(changed){
       changed=false;
@@ -490,23 +592,15 @@ function speciesViewNodes(viewId,speciesKey=currentSpecies){
         }
       }
     }
-    return visible.filter(n=>ids.has(n.id));
+  }else if(view.kind==='foundation'){
+    const descriptor=navigationCatalog.foundationsBySpecies.get(speciesKey)?.get(String(view.key));
+    ids=new Set(descriptor?.memberIds||[]);
   }
-
-  if(viewId.startsWith('founder:')){
-    const founderId=decodeURIComponent(viewId.slice(8));
-    const ids=descendantIdsFrom(founderId,childrenByParentId,childId=>{
-      const child=byId.get(childId);
-      return child&&nodeSpeciesKey(child)===speciesKey;
-    });
-    return visible.filter(n=>ids.has(n.id));
-  }
-
-  return visible;
+  return full.filter(n=>ids.has(n.id)&&(!hideInactive||n.breedingActive));
 }
 
 function getVisibleNodes(){
-  let list=speciesViewNodes(currentLineage,currentSpecies);
+  let list=viewNodes(activeView,currentSpecies);
   const q=search.value.trim().toLowerCase();
   if(q){
     list=list.filter(n=>[
@@ -556,27 +650,273 @@ function svgEl(name,attrs={}){
   return el;
 }
 
-function render(){
+const categoryPanelsOpen={species:false,bloodline:false,foundation:false};
+let draggedCategory=null;
+
+function speciesHue(key){
+  let hash=0;
+  for(const char of String(key))hash=(hash*31+char.charCodeAt(0))>>>0;
+  return (190+(hash%210))%360;
+}
+
+function categoryBucket(kind,speciesKey=currentSpecies){
+  if(kind==='species')return preferences.navigation.species;
+  const collection=kind==='bloodline'?preferences.navigation.bloodlines:preferences.navigation.foundations;
+  if(!collection[speciesKey])collection[speciesKey]=normalizeCategoryBucket({});
+  return collection[speciesKey];
+}
+
+function categoryDescriptors(kind,speciesKey=currentSpecies){
+  let descriptors=[];
+  if(kind==='species')descriptors=[...navigationCatalog.species.values()];
+  else if(kind==='bloodline')descriptors=[...(navigationCatalog.bloodlinesBySpecies.get(speciesKey)?.values()||[])];
+  else descriptors=[...(navigationCatalog.foundationsBySpecies.get(speciesKey)?.values()||[])];
+  const bucket=categoryBucket(kind,speciesKey);
+  const compare=kind==='species'
+    ? (a,b)=>b.memberIds.size-a.memberIds.size||speciesLabel(a.key).localeCompare(speciesLabel(b.key),'en')
+    : kind==='bloodline'
+      ? (a,b)=>b.memberIds.size-a.memberIds.size||a.key.localeCompare(b.key,'en')
+      : (a,b)=>b.descendantIds.size-a.descendantIds.size||displayName(byId.get(a.founderId)).localeCompare(displayName(byId.get(b.founderId)),'en')||Number(a.key)-Number(b.key);
+  return mergeManualOrder(descriptors,bucket.order,compare);
+}
+
+function categoryAutoHidden(descriptor){
+  if(descriptor.kind==='bloodline'){
+    return hideInactive&&![...descriptor.memberIds].some(id=>byId.get(id)?.breedingActive);
+  }
+  if(descriptor.kind==='foundation'){
+    const founder=byId.get(descriptor.founderId);
+    return foundationVisibility(founder,hideInactive,false).autoHidden;
+  }
+  return false;
+}
+
+function categoryIsActive(descriptor){
+  if(descriptor.kind==='species')return currentSpecies===descriptor.key;
+  return currentSpecies===descriptor.speciesKey&&activeView.kind===descriptor.kind&&String(activeView.key)===descriptor.key;
+}
+
+function categoryLabel(descriptor){
+  if(descriptor.kind==='species')return `${speciesLabel(descriptor.key)} (${descriptor.memberIds.size})`;
+  if(descriptor.kind==='bloodline')return `${descriptor.key} (${descriptor.memberIds.size})`;
+  return `${displayName(byId.get(descriptor.founderId))} (${descriptor.descendantIds.size})`;
+}
+
+function categoryColor(descriptor){
+  if(descriptor.kind==='species')return `hsl(${speciesHue(descriptor.key)} 55% 62%)`;
+  if(descriptor.kind==='bloodline')return '#9a86aa';
+  return '#c48c52';
+}
+
+function activateCategory(descriptor){
+  if(descriptor.kind==='species'){
+    currentSpecies=descriptor.key;
+    activeView={kind:'species',key:null};
+  }else{
+    currentSpecies=descriptor.speciesKey;
+    activeView={kind:descriptor.kind,key:descriptor.key};
+  }
+  selected=null;
+  updateCategoryNavigation();
+  render({selectFirst:true});
+}
+
+function moveCategoryBefore(kind,source,target,speciesKey=currentSpecies){
+  if(!source||!target||source===target)return;
+  const order=categoryDescriptors(kind,speciesKey).map(item=>item.key);
+  const from=order.indexOf(source),to=order.indexOf(target);
+  if(from<0||to<0)return;
+  order.splice(from,1);
+  order.splice(order.indexOf(target),0,source);
+  categoryBucket(kind,speciesKey).order=order;
+  savePreferences();
+  updateCategoryNavigation();
+}
+
+function hideCategory(descriptor){
+  const wasActive=categoryIsActive(descriptor);
+  const bucket=categoryBucket(descriptor.kind,descriptor.speciesKey);
+  if(!bucket.manualHidden.includes(descriptor.key))bucket.manualHidden.push(descriptor.key);
+  categoryPanelsOpen[descriptor.kind]=true;
+  savePreferences();
+  if(wasActive){
+    if(descriptor.kind==='species')currentSpecies=defaultSpeciesKey();
+    activeView={kind:'species',key:null};
+    selected=null;
+  }
+  updateCategoryNavigation();
+  render({selectFirst:wasActive});
+}
+
+function restoreCategory(descriptor){
+  const bucket=categoryBucket(descriptor.kind,descriptor.speciesKey);
+  bucket.manualHidden=bucket.manualHidden.filter(key=>key!==descriptor.key);
+  savePreferences();
+  activateCategory(descriptor);
+}
+
+function renderCategoryZone(kind,tabsEl,hiddenEl){
+  tabsEl.innerHTML='';
+  hiddenEl.innerHTML='';
+  const descriptors=categoryDescriptors(kind);
+  const bucket=categoryBucket(kind);
+  const manualHidden=new Set(bucket.manualHidden);
+  const visible=descriptors.filter(item=>!categoryAutoHidden(item)&&!manualHidden.has(item.key));
+  const restorable=descriptors.filter(item=>!categoryAutoHidden(item)&&manualHidden.has(item.key));
+
+  for(const descriptor of visible){
+    const item=document.createElement('span');
+    item.className='category-item';
+    item.draggable=true;
+    item.dataset.categoryKey=descriptor.key;
+    item.style.setProperty('--category-color',categoryColor(descriptor));
+    item.title=`Drag to reorder ${kind} categories`;
+    item.addEventListener('dragstart',event=>{
+      draggedCategory={kind,key:descriptor.key,speciesKey:descriptor.speciesKey};
+      item.classList.add('dragging');
+      event.dataTransfer.effectAllowed='move';
+      event.dataTransfer.setData('text/plain',descriptor.key);
+    });
+    item.addEventListener('dragover',event=>{
+      if(draggedCategory?.kind===kind&&draggedCategory.key!==descriptor.key){event.preventDefault();item.classList.add('drag-over')}
+    });
+    item.addEventListener('dragleave',()=>item.classList.remove('drag-over'));
+    item.addEventListener('drop',event=>{
+      event.preventDefault();item.classList.remove('drag-over');
+      moveCategoryBefore(kind,draggedCategory?.key,descriptor.key,descriptor.speciesKey);
+    });
+    item.addEventListener('dragend',()=>{
+      draggedCategory=null;
+      document.querySelectorAll('.category-item').forEach(element=>element.classList.remove('dragging','drag-over'));
+    });
+
+    const button=document.createElement('button');
+    button.className='tab category-tab'+(categoryIsActive(descriptor)?' active':'');
+    button.textContent=categoryLabel(descriptor);
+    button.addEventListener('click',()=>activateCategory(descriptor));
+    const hide=document.createElement('button');
+    hide.className='category-hide';
+    hide.textContent='×';
+    hide.title=`Hide ${categoryLabel(descriptor)}`;
+    hide.setAttribute('aria-label',hide.title);
+    hide.addEventListener('click',()=>hideCategory(descriptor));
+    item.append(button,hide);
+    tabsEl.appendChild(item);
+  }
+
+  if(restorable.length){
+    const title=kind==='species'?'Hidden Species':kind==='bloodline'?'Hidden Bloodlines':'Hidden Foundations';
+    const toggle=document.createElement('button');
+    toggle.className='tab hidden-toggle';
+    toggle.textContent=`${title} (${restorable.length})`;
+    toggle.addEventListener('click',()=>{
+      categoryPanelsOpen[kind]=!categoryPanelsOpen[kind];
+      renderCategoryZone(kind,tabsEl,hiddenEl);
+    });
+    tabsEl.appendChild(toggle);
+  }
+
+  hiddenEl.classList.toggle('visible',categoryPanelsOpen[kind]&&restorable.length>0);
+  if(categoryPanelsOpen[kind]&&restorable.length){
+    const label=document.createElement('span');label.className='small';label.textContent='Restore:';hiddenEl.appendChild(label);
+    for(const descriptor of restorable){
+      const button=document.createElement('button');
+      button.className='restore-category';button.textContent=categoryLabel(descriptor);
+      button.addEventListener('click',()=>restoreCategory(descriptor));
+      hiddenEl.appendChild(button);
+    }
+  }
+}
+
+function updateCategoryNavigation(){
+  const previousSpecies=currentSpecies,previousKind=activeView.kind,previousKey=activeView.key;
+  if(currentSpecies&&!navigationCatalog.species.has(currentSpecies))currentSpecies='';
+  if(!currentSpecies||!speciesKeys().includes(currentSpecies))currentSpecies=defaultSpeciesKey();
+  if(activeView.kind==='bloodline'||activeView.kind==='foundation'){
+    const descriptors=activeView.kind==='bloodline'
+      ? navigationCatalog.bloodlinesBySpecies.get(currentSpecies)
+      : navigationCatalog.foundationsBySpecies.get(currentSpecies);
+    const descriptor=descriptors?.get(String(activeView.key));
+    const bucket=categoryBucket(activeView.kind,currentSpecies);
+    if(!descriptor||categoryAutoHidden(descriptor)||bucket.manualHidden.includes(descriptor.key))activeView={kind:'species',key:null};
+  }
+  renderCategoryZone('species',speciesTabsEl,hiddenSpeciesEl);
+  renderCategoryZone('bloodline',bloodlineTabsEl,hiddenBloodlinesEl);
+  renderCategoryZone('foundation',foundationTabsEl,hiddenFoundationsEl);
+  breedingBtn.classList.toggle('active',activeView.kind==='breeding');
+  speciesBadge.textContent=currentSpecies?`Species: ${speciesLabel(currentSpecies)}`:'Species: none selected';
+  const pop=currentSpeciesNodes();
+  const females=pop.filter(n=>n.sex==='F').length,males=pop.filter(n=>n.sex==='M').length;
+  const present=pop.filter(n=>n.isPresent===true).length;
+  populationBadge.textContent=`Population: ${females} F / ${males} M / ${present} present / ${pop.length} total`;
+  updateInactiveToggle();
+  updateUsefulConfig();
+  return previousSpecies!==currentSpecies||previousKind!==activeView.kind||previousKey!==activeView.key;
+}
+
+function activeViewDescription(){
+  if(activeView.kind==='bloodline')return `${activeView.key} bloodline individuals with their known ancestors for pedigree context.`;
+  if(activeView.kind==='foundation'){
+    const descriptor=navigationCatalog.foundationsBySpecies.get(currentSpecies)?.get(String(activeView.key));
+    return `Known descendants of ${displayName(byId.get(descriptor?.founderId))}, identified by founder UID ${activeView.key}.`;
+  }
+  return `All known parentage for ${speciesLabel(currentSpecies)}.`;
+}
+
+function activeViewLabel(){
+  if(activeView.kind==='bloodline')return `Bloodline ${activeView.key}`;
+  if(activeView.kind==='foundation'){
+    const descriptor=navigationCatalog.foundationsBySpecies.get(currentSpecies)?.get(String(activeView.key));
+    return `Foundation ${displayName(byId.get(descriptor?.founderId))}`;
+  }
+  return speciesLabel(currentSpecies);
+}
+
+function updateInactiveToggle(){
+  const inactiveCount=currentSpeciesNodes().filter(n=>!n.breedingActive).length;
+  inactiveToggleBtn.textContent=hideInactive?`Show inactive (${inactiveCount})`:`Hide inactive (${inactiveCount})`;
+  inactiveToggleBtn.classList.toggle('active',hideInactive);
+  inactiveToggleBtn.setAttribute('aria-pressed',String(hideInactive));
+  inactiveToggleBtn.disabled=inactiveCount===0;
+  inactiveToggleBtn.style.display=activeView.kind==='breeding'?'none':'';
+}
+
+breedingBtn.addEventListener('click',()=>{
+  activeView={kind:'breeding',key:null};selected=null;updateCategoryNavigation();render();
+});
+
+inactiveToggleBtn.addEventListener('click',()=>{
+  hideInactive=!hideInactive;
+  const lostSelection=Boolean(hideInactive&&selected&&!byId.get(selected)?.breedingActive);
+  if(lostSelection)selected=null;
+  const viewChanged=updateCategoryNavigation();render({selectFirst:viewChanged||lostSelection});
+});
+
+function render({selectFirst=false}={}){
   hideTooltip();
-  if(currentLineage==='breeding'){
+  if(activeView.kind==='breeding'){
     renderBreedingTable();
     return;
   }
   breedingTableWrap.style.display='none';
   wrap.style.display='block';
   const list=getVisibleNodes();
-  const view=getSpeciesViews(currentSpecies).find(v=>v.id===currentLineage);
-  viewTitle.textContent=view?.label||speciesLabel(currentSpecies);
-  desc.textContent=view?.description||`${speciesLabel(currentSpecies)} pedigree built from scanned pets.`;
+  viewTitle.textContent=activeViewLabel();
+  desc.textContent=activeViewDescription();
   countText.textContent=`${list.length} individuals / data points`;
   tree.innerHTML='';
   if(!list.length){
+    if(selectFirst){
+      selected=null;
+      detail.innerHTML='<div class="detail-placeholder">No pet matches the current category and search filters.</div>';
+    }
     tree.setAttribute('viewBox','0 0 800 280');
     const t=svgEl('text',{x:400,y:140,'text-anchor':'middle',fill:'#9aa5ad','font-size':'14'});
     t.textContent='No results for this search.';
     tree.appendChild(t); lastLayout=null; zoomLabel.textContent=`${Math.round(zoomScale*100)}%`; return;
   }
   const L=layoutNodes(list); lastLayout=L;
+  if(selectFirst)selected=firstLayoutNodeId(L);
   const siblingIds=new Set(selected?(siblingsById.get(selected)||[]):[]);
   tree.setAttribute('viewBox',`0 0 ${L.width} ${L.height}`);
   applyZoom();
@@ -611,6 +951,7 @@ function render(){
     g.addEventListener('mouseleave',hideTooltip);
     tree.appendChild(g);
   }
+  if(selectFirst&&selected)renderSelectedDetail(selected);
 }
 
 function statClass(index,val,speciesKey=currentSpecies){
@@ -678,8 +1019,8 @@ function jumpToNode(id){
   const n=byId.get(id); if(!n)return;
   if(hideInactive&&!n.breedingActive)hideInactive=false;
   currentSpecies=nodeSpeciesKey(n);
-  currentLineage='all';
-  updateSpeciesTabs(); updateTabs(); selectNode(id);
+  activeView={kind:'species',key:null};
+  updateCategoryNavigation();selectNode(id);
 }
 
 function scrollNodeIntoView(id){
@@ -823,154 +1164,17 @@ function renderBreedingTable(){
   breedingTable.querySelectorAll('input[data-field]').forEach(el=>el.addEventListener('input',()=>saveField(el)));
   breedingTable.querySelectorAll('select[data-field]').forEach(el=>el.addEventListener('change',()=>saveField(el)));
   breedingTable.querySelectorAll('.open-node').forEach(b=>b.addEventListener('click',()=>{
-    const n=byId.get(b.dataset.id); if(n)currentSpecies=nodeSpeciesKey(n); currentLineage='all'; updateSpeciesTabs(); updateTabs(); render(); selectNode(b.dataset.id);
+    const n=byId.get(b.dataset.id);
+    if(!n)return;
+    currentSpecies=nodeSpeciesKey(n);activeView={kind:'species',key:null};
+    updateCategoryNavigation();selectNode(b.dataset.id);
   }));
 }
 
 showInactiveBoardInput.addEventListener('change',()=>{
   showInactiveBreeding=showInactiveBoardInput.checked;
-  if(currentLineage==='breeding')renderBreedingTable();
+  if(activeView.kind==='breeding')renderBreedingTable();
 });
-
-function speciesHue(key){
-  let hash=0;
-  for(const char of String(key))hash=(hash*31+char.charCodeAt(0))>>>0;
-  return (190+(hash%210))%360;
-}
-
-let draggedSpecies=null;
-function moveSpeciesBefore(source,target){
-  if(!source||!target||source===target)return;
-  const order=allSpeciesKeys();
-  const from=order.indexOf(source), to=order.indexOf(target);
-  if(from<0||to<0)return;
-  order.splice(from,1);
-  order.splice(order.indexOf(target),0,source);
-  preferences.speciesOrder=order; draggedSpecies=null; savePreferences(); updateSpeciesTabs();
-}
-
-function updateSpeciesTabs(){
-  speciesTabsEl.innerHTML='';
-  const keys=speciesKeys();
-  for(const key of keys){
-    const count=DATA.nodes.filter(n=>nodeSpeciesKey(n)===key).length;
-    const item=document.createElement('span');
-    item.className='species-item';
-    item.draggable=true;
-    item.dataset.species=key;
-    item.title='Drag to reorder species tabs';
-    item.addEventListener('dragstart',e=>{
-      draggedSpecies=key; item.classList.add('dragging');
-      e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',key);
-    });
-    item.addEventListener('dragover',e=>{if(draggedSpecies&&draggedSpecies!==key){e.preventDefault();item.classList.add('drag-over')}});
-    item.addEventListener('dragleave',()=>item.classList.remove('drag-over'));
-    item.addEventListener('drop',e=>{e.preventDefault();item.classList.remove('drag-over');moveSpeciesBefore(draggedSpecies,key)});
-    item.addEventListener('dragend',()=>{draggedSpecies=null;document.querySelectorAll('.species-item').forEach(el=>el.classList.remove('dragging','drag-over'))});
-    const b=document.createElement('button');
-    b.className='tab species-tab'+(key===currentSpecies?' active':'');
-    b.style.setProperty('--species-color',`hsl(${speciesHue(key)} 55% 62%)`);
-    b.textContent=`${speciesLabel(key)} (${count})`;
-    b.addEventListener('click',()=>{
-      currentSpecies=key; currentLineage='all'; selected=null;
-      updateSpeciesTabs(); updateTabs(); render();
-    });
-    const hide=document.createElement('button');
-    hide.className='species-hide';
-    hide.textContent='×';
-    hide.title=`Ignore ${speciesLabel(key)}`;
-    hide.setAttribute('aria-label',`Ignore ${speciesLabel(key)}`);
-    hide.addEventListener('click',()=>{
-      hiddenSpecies.add(key); savePreferences(); hiddenSpeciesPanelOpen=true;
-      if(currentSpecies===key)currentSpecies=defaultSpeciesKey();
-      currentLineage='all'; selected=null; updateSpeciesTabs(); updateTabs(); render();
-    });
-    item.append(b,hide); speciesTabsEl.appendChild(item);
-  }
-  if(hiddenSpecies.size){
-    const toggle=document.createElement('button');
-    toggle.className='tab hidden-toggle';
-    toggle.textContent=`Hidden species (${hiddenSpecies.size})`;
-    toggle.addEventListener('click',()=>{hiddenSpeciesPanelOpen=!hiddenSpeciesPanelOpen;updateHiddenSpeciesPanel()});
-    speciesTabsEl.appendChild(toggle);
-  }
-  updateHiddenSpeciesPanel();
-  speciesBadge.textContent=currentSpecies?`Species: ${speciesLabel(currentSpecies)}`:'Species: none selected';
-  const pop=currentSpeciesNodes();
-  const females=pop.filter(n=>n.sex==='F').length, males=pop.filter(n=>n.sex==='M').length;
-  const present=pop.filter(n=>n.isPresent===true).length;
-  populationBadge.textContent=`Population: ${females} F / ${males} M / ${present} present / ${pop.length} total`;
-  updateInactiveToggle();
-  updateUsefulConfig();
-}
-
-function updateHiddenSpeciesPanel(){
-  hiddenSpeciesEl.innerHTML='';
-  hiddenSpeciesEl.classList.toggle('visible',hiddenSpeciesPanelOpen&&hiddenSpecies.size>0);
-  if(!hiddenSpeciesPanelOpen||!hiddenSpecies.size)return;
-  const label=document.createElement('span'); label.className='small'; label.textContent='Restore:'; hiddenSpeciesEl.appendChild(label);
-  for(const key of allSpeciesKeys().filter(key=>hiddenSpecies.has(key))){
-    const b=document.createElement('button'); b.className='restore-species'; b.textContent=speciesLabel(key);
-    b.title=`Show ${speciesLabel(key)} again`;
-    b.addEventListener('click',()=>{hiddenSpecies.delete(key);savePreferences();currentSpecies=key;currentLineage='all';selected=null;updateSpeciesTabs();updateTabs();render()});
-    hiddenSpeciesEl.appendChild(b);
-  }
-}
-
-function getSpeciesViews(speciesKey=currentSpecies){
-  // Build group definitions from the complete species population. Hide inactive
-  // removes a group only when none of its actual members remains active.
-  const allNodes=DATA.nodes.filter(n=>nodeSpeciesKey(n)===speciesKey);
-  const views=[{id:'all',label:'Complete pedigree',description:`All known parentage for ${speciesLabel(speciesKey)}.`}];
-
-  const lineages=[...new Set(allNodes.map(n=>n.bloodline||'Unknown'))]
-    .filter(Boolean).sort((a,b)=>a.localeCompare(b,'en'));
-  for(const lineage of lineages){
-    const members=allNodes.filter(n=>(n.bloodline||'Unknown')===lineage);
-    const visibleMembers=hideInactive?members.filter(n=>n.breedingActive):members;
-    if(!visibleMembers.length)continue;
-    views.push({
-      id:'lineage:'+encodeURIComponent(lineage),
-      label:`Bloodline ${lineage} (${visibleMembers.length})`,
-      description:`${lineage} bloodline individuals with their known ancestors for pedigree context.`
-    });
-  }
-
-  const founders=allNodes.filter(n=>
-    (!n.mother && !n.father) &&
-    n.wildFounder===true
-  ).sort((a,b)=>displayName(a).localeCompare(displayName(b),'en'));
-
-  for(const founder of founders){
-    const founderView='founder:'+encodeURIComponent(founder.id);
-    const branch=speciesViewNodes(founderView,speciesKey);
-    if(hideInactive && !branch.length)continue;
-    views.push({
-      id:founderView,
-      label:`Foundation ${displayName(founder)} (${branch.length})`,
-      description:`Known descendants of ${displayName(founder)}, identified as a tame pet with no recorded parents.`
-    });
-  }
-  return views;
-}
-
-function updateTabs(){
-  tabsEl.innerHTML='';
-  const views=getSpeciesViews(currentSpecies);
-  if(currentLineage!=='breeding' && !views.some(v=>v.id===currentLineage))currentLineage='all';
-  for(const v of views){
-    const b=document.createElement('button');
-    const kind=v.id==='all'?'view-all':v.id.startsWith('lineage:')?'view-lineage':'view-founder';
-    b.className=`tab view-tab ${kind}`+(v.id===currentLineage?' active':'');
-    b.textContent=v.label;
-    b.addEventListener('click',()=>{currentLineage=v.id;selected=null;updateTabs();render()});
-    tabsEl.appendChild(b);
-  }
-  breedingBtn.classList.toggle('active',currentLineage==='breeding');
-  updateInactiveToggle();
-}
-
-breedingBtn.addEventListener('click',()=>{currentLineage='breeding';selected=null;updateTabs();render()});
 
 function updateUsefulConfig(){
   const mask=usefulMask();
@@ -1006,21 +1210,6 @@ document.getElementById('addRoleBtn').addEventListener('click',()=>{
   render(); refreshSelectedDetail();
 });
 
-function updateInactiveToggle(){
-  const inactiveCount=currentSpeciesNodes().filter(n=>!n.breedingActive).length;
-  inactiveToggleBtn.textContent=hideInactive?`Show inactive (${inactiveCount})`:`Hide inactive (${inactiveCount})`;
-  inactiveToggleBtn.classList.toggle('active',hideInactive);
-  inactiveToggleBtn.setAttribute('aria-pressed',String(hideInactive));
-  inactiveToggleBtn.disabled=inactiveCount===0;
-  inactiveToggleBtn.style.display=currentLineage==='breeding'?'none':'';
-}
-
-inactiveToggleBtn.addEventListener('click',()=>{
-  hideInactive=!hideInactive;
-  if(hideInactive && selected && !byId.get(selected)?.breedingActive)selected=null;
-  updateInactiveToggle(); updateTabs(); render();
-});
-
 const LOCAL_POLL_MS=60000;
 let lastJsonText=null;
 let refreshInFlight=false;
@@ -1050,7 +1239,7 @@ function syncGraphUserData(){
   const root=currentPayload.user_data&&typeof currentPayload.user_data==='object'&&!Array.isArray(currentPayload.user_data)
     ? currentPayload.user_data:{};
   const existing=root.graph&&typeof root.graph==='object'&&!Array.isArray(root.graph)?root.graph:{};
-  root.graph={...existing,schema_version:1,preferences:JSON.parse(JSON.stringify(preferences)),annotations:encodedAnnotations()};
+  root.graph={...existing,schema_version:2,preferences:JSON.parse(JSON.stringify(preferences)),annotations:encodedAnnotations()};
   currentPayload.user_data=root;
 }
 
@@ -1064,8 +1253,9 @@ function hydrateGraphUserData(payload){
   const graph=payload?.user_data?.graph;
   if(!graph||typeof graph!=='object')return;
   if(graph.preferences&&typeof graph.preferences==='object'&&!Array.isArray(graph.preferences)){
-    Object.assign(preferences,graph.preferences);
-    hiddenSpecies=new Set(Array.isArray(preferences.hiddenSpecies)?preferences.hiddenSpecies:[]);
+    const normalized=normalizePreferences(graph.preferences);
+    for(const key of Object.keys(preferences))delete preferences[key];
+    Object.assign(preferences,normalized);
     localStorage.setItem(PREFS_KEY,JSON.stringify(preferences));
   }
   if(graph.annotations&&typeof graph.annotations==='object'&&!Array.isArray(graph.annotations)){
@@ -1082,6 +1272,10 @@ function rebuildIndex(){byId=new Map(DATA.nodes.map(n=>[n.id,n]));}
 
 function rebuildRelationshipIndexes(){
   ({childrenByParentId,siblingsById}=buildRelationshipIndexes(DATA.nodes));
+}
+
+function rebuildNavigationCatalog(){
+  navigationCatalog=buildNavigationCatalog(DATA.nodes,childrenByParentId);
 }
 
 function displayName(n){
@@ -1152,9 +1346,7 @@ function applyIcarusJson(payload){
       historical,
       role:'',notes:'',mother:null,father:null
     };
-    n.wildFounder=numericUid(p.mother_uid)===null &&
-      numericUid(p.father_uid)===null &&
-      !canonicalName(p.mother) && !canonicalName(p.father);
+    n.originKind=classifyPetOrigin(p);
     n.total7=n.stats.reduce((a,b)=>a+b,0);
     n.usefulScore=usefulScore(n);
     nodes.push(n);
@@ -1197,9 +1389,9 @@ function applyIcarusJson(payload){
 
   const speciesCount=new Set(validPets.map(p=>normalizeSpeciesKey(p.species_key||p.actor_class))).size;
   importBadge.textContent=`JSON: ${validPets.length} pets · ${speciesCount} species · ${new Date().toLocaleDateString('en-GB')}`;
-  rebuildIndex(); rebuildRelationshipIndexes(); applyBoardEdits();
+  rebuildIndex();rebuildRelationshipIndexes();applyBoardEdits();rebuildNavigationCatalog();
   if(!speciesKeys().includes(currentSpecies))currentSpecies=defaultSpeciesKey();
-  updateSpeciesTabs(); updateTabs(); updateInactiveToggle(); render();
+  updateCategoryNavigation();render();
 }
 
 function openDirectoryDb(){
@@ -1475,7 +1667,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)hideTooltip
 document.getElementById('clearBtn').addEventListener('click',()=>{selected=null;detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div>';render()});
 search.addEventListener('input',()=>{selected=null;render()});
 window.addEventListener('resize',()=>render());
-applyBoardEdits(); updateSpeciesTabs(); updateTabs(); render();
+applyBoardEdits();updateCategoryNavigation();render();
 </script>
 </body>
 </html>
