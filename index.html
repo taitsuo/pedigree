@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.31 local-only</title>
+<title>Icarus — Pet Pedigree & Breeding Board — V0.31.1 local-only</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -18,12 +18,17 @@ h1{font-family:Georgia,'Times New Roman',serif;font-size:25px;margin:0 0 7px;fon
 .subtitle{color:var(--muted);font-size:14px;max-width:820px;line-height:1.45}
 .badges{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .badge{border:1px solid #4d503f;border-radius:4px;padding:6px 10px;color:var(--muted);font-size:12px;white-space:nowrap;background:#202219}
-.toolbar{display:grid;grid-template-columns:minmax(230px,1fr) minmax(260px,2fr) auto;gap:12px;align-items:center;margin:16px 0}
+.toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:12px;align-items:center;margin:16px 0}
+.toolbar-left{justify-self:start}.toolbar-center{justify-self:center}.toolbar-right{justify-self:end}
+.search-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,520px) minmax(0,1fr);align-items:center;gap:12px;margin:8px 0 12px}
+.search-row .search{grid-column:2}
+.search-row #desc{grid-column:2;text-align:center;margin-top:-4px}
 .tabs{display:flex;gap:7px;flex-wrap:wrap}
 .category-zone{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px 10px;align-items:start;padding:8px 0;border-bottom:1px solid #35382e}
 .category-label{padding-top:8px;color:#908d7c;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase}
 .category-zone>.hidden-categories{grid-column:2}
-.view-nav{display:flex;align-items:flex-start;justify-content:flex-end;gap:14px;margin-top:8px}
+.view-nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin-top:8px}
+.view-nav .view-left{justify-self:start}.view-nav .view-center{justify-self:center}.view-nav .view-right{justify-self:end}
 .tab{background:#1a1c17;color:var(--muted);border:1px solid var(--border);padding:8px 12px;border-radius:4px;cursor:pointer;font:inherit;font-size:13px}
 .tab.active{background:var(--card2);color:var(--text);border-color:#53616b}
 .category-item{display:inline-flex;align-items:stretch;--category-color:#8b9b8b}
@@ -74,15 +79,22 @@ h1{font-family:Georgia,'Times New Roman',serif;font-size:25px;margin:0 0 7px;fon
 .detail-relations .relation-group{flex:1;min-width:0}
 .detail-relations .relation-label{display:inline-block;margin-right:7px;color:var(--muted);font-size:10px}
 .detail-relations .linkbtn{margin-top:0;margin-bottom:0}
-.detail-fields{grid-column:1/-1;display:grid;grid-template-columns:minmax(150px,.7fr) minmax(180px,1fr) minmax(300px,2fr);gap:10px;border-top:1px solid var(--border);padding-top:10px}
+.detail-fields{grid-column:1/-1;display:grid;grid-template-columns:minmax(150px,.7fr) minmax(180px,1fr) minmax(300px,2fr) auto;gap:10px;border-top:1px solid var(--border);padding-top:10px}
+.detail-fields>label:nth-child(1){grid-column:1}.detail-fields>label:nth-child(2){grid-column:2}.detail-fields>label:nth-child(3){grid-column:3/5}
+.detail-fields .detail-notes{grid-column:1/4}
+.detail-fields .detail-actions{grid-column:4;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;gap:8px;min-width:max-content;padding-top:15px}
+.detail-fields .detail-actions .tab,.detail-fields .detail-actions .control{white-space:nowrap}
+.detail-fields .detail-actions .save-state{text-align:right;min-height:12px}
 .detail-fields label{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
 .detail-fields input,.detail-fields textarea{display:block;width:100%;margin-top:4px;background:#1b1e18;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 8px;font:inherit;font-size:11px;text-transform:none;letter-spacing:normal}
 .detail-fields textarea{min-height:56px;resize:vertical}
 .detail-fields input:focus,.detail-fields textarea:focus,.detail-fields select:focus{outline:1px solid #9f8354;border-color:#9f8354}
 .detail-fields select{display:block;width:100%;margin-top:4px;background:#1b1e18;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 8px;font:inherit;font-size:11px;text-transform:none;letter-spacing:normal}
-.detail-save{grid-column:1/-1;display:flex;align-items:center;gap:9px;justify-content:flex-end}
+.detail-save{display:flex;align-items:center;gap:9px;justify-content:flex-end}
 .save-state{font-size:10px;color:var(--active);min-width:42px}
-.lineage-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:18px;background:linear-gradient(90deg,rgba(164,135,74,.08),transparent 45%)}
+.lineage-head{padding:10px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:minmax(180px,1fr) auto minmax(180px,1fr);align-items:center;gap:18px;background:linear-gradient(90deg,rgba(164,135,74,.08),transparent 45%)}
+.lineage-head .visual-controls{justify-self:center;padding-left:0;border-left:0}
+.lineage-head #countText{justify-self:end;text-align:right}
 .lineage-head strong{font-size:14px}
 .lineage-head span{font-size:12px;color:var(--muted)}
 .canvas-wrap{position:relative;overflow:auto;min-height:610px;max-height:760px;cursor:grab;user-select:none;background:
@@ -109,7 +121,8 @@ svg{display:block;min-width:100%;}
 .node .score{fill:var(--text);font-size:10px;font-weight:650}
 .node .sexmark{font-size:11px;font-weight:800}
 .node:hover rect.body{filter:brightness(1.15);stroke-width:2}
-.node.selected rect.body{stroke:#e5eef5;stroke-width:2.5}
+.node.selected rect.body{stroke:#f8fbff;stroke-width:2.8}
+.selection-outline{fill:none;stroke:#ffffff;stroke-width:3.4;rx:5;pointer-events:none;filter:drop-shadow(0 0 2px rgba(255,255,255,.95)) drop-shadow(0 0 7px rgba(210,230,255,.75))}
 .node.sibling-peer{filter:drop-shadow(0 0 2px rgba(214,185,120,.60)) drop-shadow(0 0 6px rgba(214,185,120,.25))}
 .node.search-muted{opacity:.16}
 .node.search-match .name{fill:#fff3c9}
@@ -163,8 +176,12 @@ svg{display:block;min-width:100%;}
  .detail-meta,.detail-relations{grid-column:1}
  .detail-fields{grid-template-columns:1fr}
  .detail-relations{flex-direction:column;gap:8px}
- .view-nav{align-items:stretch;flex-direction:column}
- .breeding-access{align-self:flex-start}
+ .view-nav{grid-template-columns:1fr;align-items:stretch}
+ .view-nav .view-left,.view-nav .view-center,.view-nav .view-right{justify-self:start}
+ .search-row{grid-template-columns:1fr}
+ .search-row .search,.search-row #desc{grid-column:1}
+ .lineage-head{grid-template-columns:1fr;align-items:start}
+ .lineage-head .visual-controls,.lineage-head #countText{justify-self:start;text-align:left}
 }
 </style>
 </head>
@@ -172,14 +189,13 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.31 LOCAL</span></h1>
+    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.31.1 LOCAL</span></h1>
     <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
   </div>
   <div class="badges">
     <span class="badge" id="speciesBadge">Species: Snow Wolf</span>
     <span class="badge" id="populationBadge">Population: —</span>
     <span class="badge" id="importBadge">JSON: not connected</span>
-    <button class="control" id="saveChoicesBtn" title="Write graph choices under user_data in Icarus_pets.json">Save choices</button>
     <button class="control primary-control" id="refreshBtn" title="Select or reload a local Icarus_pets.json folder">Connect / Refresh</button>
   </div>
 </header>
@@ -200,23 +216,14 @@ svg{display:block;min-width:100%;}
   <div class="hidden-categories" id="hiddenFoundations"></div>
 </div>
 <div class="view-nav">
-  <div class="view-actions">
-    <button class="tab" id="usefulConfigBtn" title="Choose which stats count toward the Useful score">Useful stats</button>
-    <button class="tab" id="addRoleBtn" title="Create a custom pet role">+ Add role</button>
+  <div class="view-left">
     <button class="tab view-tab view-breeding breeding-access" id="breedingBtn">Breeding Board</button>
   </div>
-</div>
-
-<div class="toolbar">
-  <input id="search" class="search" type="search" placeholder="Search a pet, bloodline, stat, role or note…">
-  <div class="small" id="desc" style="color:var(--muted);font-size:12px"></div>
-  <div class="controls visual-controls" aria-label="View controls">
-    <span class="control-label">View</span>
-    <button class="control" id="zoomOutBtn" title="Zoom out">−</button>
-    <button class="control" id="zoomLabel" title="Current zoom">100%</button>
-    <button class="control" id="zoomInBtn" title="Zoom in">+</button>
-    <button class="control" id="fitBtn" title="Fit the pedigree to the window">Fit</button>
-    <button class="control" id="inactiveToggleBtn" title="Hide pets excluded from breeding">Hide inactive</button>
+  <div class="view-center">
+    <button class="tab" id="usefulConfigBtn" title="Choose which stats count toward the Useful score">Useful stats</button>
+  </div>
+  <div class="view-right">
+    <button class="control" id="saveChoicesBtn" title="Write graph choices under user_data in Icarus_pets.json">Save choices</button>
   </div>
 </div>
 
@@ -233,9 +240,22 @@ svg{display:block;min-width:100%;}
     <aside class="detail" id="detail"><div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div></aside>
   </div>
 
+  <div class="search-row">
+    <input id="search" class="search" type="search" placeholder="Search a pet, bloodline, stat, role or note…">
+    <div class="small" id="desc" style="color:var(--muted);font-size:12px"></div>
+  </div>
+
   <section class="mainpanel">
     <div class="lineage-head">
       <strong id="viewTitle">Complete pedigree</strong>
+      <div class="controls visual-controls" aria-label="View controls">
+        <span class="control-label">View</span>
+        <button class="control" id="zoomOutBtn" title="Zoom out">−</button>
+        <button class="control" id="zoomLabel" title="Current zoom">100%</button>
+        <button class="control" id="zoomInBtn" title="Zoom in">+</button>
+        <button class="control" id="fitBtn" title="Fit the pedigree to the window">Fit</button>
+        <button class="control" id="inactiveToggleBtn" title="Hide pets excluded from breeding">Hide inactive</button>
+      </div>
       <span id="countText"></span>
     </div>
     <div class="canvas-wrap" id="canvasWrap" title="Click and drag to move around the pedigree">
@@ -384,7 +404,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.31 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// V0.31.1 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -959,6 +979,10 @@ function render({selectFirst=false}={}){
     g.addEventListener('mouseleave',hideTooltip);
     tree.appendChild(g);
   }
+  if(selected&&L.pos.has(selected)){
+    const p=L.pos.get(selected);
+    tree.appendChild(svgEl('rect',{class:'selection-outline',x:p.x-2,y:p.y-2,width:p.w+4,height:p.h+4,rx:6}));
+  }
   if(selectFirst&&selected)renderSelectedDetail(selected);
 }
 
@@ -994,8 +1018,12 @@ function renderSelectedDetail(id){
         <label>Nickname<input data-detail-field="nickname" value="${esc(n.nickname||'')}" placeholder="Optional nickname"></label>
         <label>Breeding status<select data-detail-field="breedingActive" ${inactiveLock?`disabled title="${esc(inactiveLock)}"`:''}><option value="true" ${n.breedingActive?'selected':''}>Active</option><option value="false" ${!n.breedingActive?'selected':''}>Inactive</option></select>${inactiveLock?`<span class="small">${esc(inactiveLock)}</span>`:''}</label>
         <label>Role<select data-detail-field="role">${roleOptionsHtml(n.role)}</select></label>
-        <label class="wide">Notes<textarea data-detail-field="notes" placeholder="Personal notes">${esc(n.notes||'')}</textarea></label>
-        <div class="detail-save"><span class="save-state" id="detailSaveState"></span><button class="control primary-control" id="saveDetailBtn">Save annotations</button></div>
+        <label class="detail-notes">Notes<textarea data-detail-field="notes" placeholder="Personal notes">${esc(n.notes||'')}</textarea></label>
+        <div class="detail-actions">
+          <button class="tab" id="detailAddRoleBtn" title="Create a custom pet role">+ Add role</button>
+          <button class="control primary-control" id="saveDetailBtn">Save annotations</button>
+          <span class="save-state" id="detailSaveState"></span>
+        </div>
       </div>
       <div class="detail-relations">
         <div class="relation-group"><span class="relation-label">Parents</span>${parentButtons}</div>
@@ -1014,6 +1042,7 @@ function renderSelectedDetail(id){
     const state=document.getElementById('detailSaveState'); if(state)state.textContent='Saved ✓';
   };
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
+  document.getElementById('detailAddRoleBtn').addEventListener('click',promptAddRole);
   detail.querySelector('[data-detail-field="notes"]').addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();saveDetail()}
   });
@@ -1206,7 +1235,7 @@ document.getElementById('usefulResetBtn').addEventListener('click',()=>{
   render(); refreshSelectedDetail();
 });
 
-document.getElementById('addRoleBtn').addEventListener('click',()=>{
+function promptAddRole(){
   const value=prompt('New role name (for example: Carrier, Breeder, Resource):','');
   const role=String(value||'').trim();
   if(!role)return;
@@ -1216,7 +1245,7 @@ document.getElementById('addRoleBtn').addEventListener('click',()=>{
     savePreferences();
   }
   render(); refreshSelectedDetail();
-});
+}
 
 const LOCAL_POLL_MS=60000;
 let lastJsonText=null;
