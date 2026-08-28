@@ -298,8 +298,6 @@ function descendantIdsFrom(founderId,childrenByParentId,accept=()=>true){
 }
 
 function classifyPetOrigin(pet){
-  const uid=Number(pet?.icarus_uid);
-  if(!Number.isFinite(uid)||uid<0||pet?.historical===true)return 'historical';
   const hasParentUid=[pet?.mother_uid,pet?.father_uid]
     .some(value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value)));
   const hasParentName=[pet?.mother,pet?.father]
@@ -323,7 +321,8 @@ function buildNavigationCatalog(nodes,childrenByParentId){
   }
 
   for(const node of nodes){
-    if(node.originKind!=='wild'||node.historical||!Number.isFinite(node.icarus_uid)||node.icarus_uid<0)continue;
+    const hasStableUid=node.icarus_uid!==null&&node.icarus_uid!==undefined&&node.icarus_uid!==''&&Number.isFinite(Number(node.icarus_uid));
+    if(node.originKind!=='wild'||!hasStableUid)continue;
     const speciesKey=node.species_key||'Unknown';
     const branch=descendantIdsFrom(node.id,childrenByParentId,childId=>{
       const child=nodeById.get(childId);
