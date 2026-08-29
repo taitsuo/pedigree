@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.31.1 local-only</title>
+<title>Icarus — Pet Pedigree & Breeding Board — V0.32.3 local-only</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -29,6 +29,10 @@ h1{font-family:Georgia,'Times New Roman',serif;font-size:25px;margin:0 0 7px;fon
 .category-zone>.hidden-categories{grid-column:2}
 .view-nav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin:8px 0}
 .view-nav .view-left{justify-self:start}.view-nav .view-center{justify-self:center}.view-nav .view-right{justify-self:end}
+.breeding-pair-panel{display:grid;grid-template-columns:minmax(150px,.8fr) minmax(190px,1fr) auto minmax(190px,1fr) auto;align-items:center;gap:10px;margin:8px 0;padding:7px 11px;border:1px solid #66583d;border-radius:6px;background:linear-gradient(90deg,#211f18,#1b1e18)}
+.breeding-pair-panel>div:first-child{display:flex;flex-direction:column;gap:4px}.breeding-pair-panel>div:first-child strong{font-family:Georgia,'Times New Roman',serif;font-size:16px}.breeding-pair-panel>div:first-child .small{color:var(--active);min-height:14px}
+.breeding-pair-slot{display:flex;align-items:baseline;gap:7px;padding:5px 9px;border:1px solid var(--border);border-radius:5px;background:#171a15}.breeding-pair-slot span{font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.breeding-pair-slot b{font-size:13px}.female-slot{border-left:3px solid var(--female)}.male-slot{border-left:3px solid var(--male)}
+.breeding-pair-symbol{font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#c7b78c}.breeding-pair-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
 .tab{background:#1a1c17;color:var(--muted);border:1px solid var(--border);padding:8px 12px;border-radius:4px;cursor:pointer;font:inherit;font-size:13px}
 .tab.active{background:var(--card2);color:var(--text);border-color:#53616b}
 .category-item{display:inline-flex;align-items:stretch;--category-color:#8b9b8b}
@@ -65,32 +69,34 @@ h1{font-family:Georgia,'Times New Roman',serif;font-size:25px;margin:0 0 7px;fon
 .detail-clear{padding:6px 8px;text-transform:none;letter-spacing:0}
 .mainpanel,.detail{background:var(--panel);border:1px solid var(--border);border-radius:6px;box-shadow:0 10px 28px rgba(0,0,0,.16)}
 .mainpanel{min-width:0;overflow:hidden}
-.detail{margin-bottom:12px;padding:12px 14px;min-height:0}
+.detail{margin-bottom:12px;padding:9px 14px;min-height:0}
 .detail-placeholder{font-size:12px;color:var(--muted);line-height:1.4}
-.detail-card{display:grid;grid-template-columns:minmax(180px,.9fr) minmax(390px,1.5fr) minmax(320px,1.35fr);gap:16px;align-items:start}
-.detail-identity h2{font-size:18px;margin:0 0 4px}
+.detail-card{display:grid;grid-template-columns:minmax(270px,.9fr) minmax(430px,1.55fr) minmax(360px,1.35fr);gap:11px 16px;align-items:center}
+.detail-identity h2{display:flex;align-items:baseline;gap:14px;font-size:18px;margin:0 0 3px}
+.detail-uid{font:600 10px Inter,ui-sans-serif,system-ui,sans-serif;color:#d8cfb7;white-space:nowrap}
 .detail-identity .small,.detail-meta .small,.detail-relations .small{font-size:11px;color:var(--muted);line-height:1.4}
-.detail .stats{display:grid;grid-template-columns:repeat(7,minmax(42px,1fr));gap:5px;margin:0}
+.detail .stats{display:grid;grid-template-columns:repeat(7,minmax(42px,1fr));gap:5px;margin:0}.detail .stat{padding:4px 2px}.detail .stat label{font-size:8px}.detail .stat b{font-size:14px;margin-top:1px}
 .detail-meta{display:grid;grid-template-columns:repeat(4,minmax(80px,1fr));gap:8px 12px;font-size:11px}
 .detail-meta .item{min-width:0}
 .detail-meta .label{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
 .detail-meta .value{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.detail-relations{grid-column:1/-1;display:flex;gap:18px;align-items:flex-start;border-top:1px solid var(--border);padding-top:9px;margin-top:-2px}
+.detail-lower{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;border-top:1px solid var(--border);padding-top:7px;margin-top:-2px}
+.detail-relations{display:flex;gap:18px;align-items:flex-start}
 .detail-relations .relation-group{flex:1;min-width:0}
 .detail-relations .relation-label{display:inline-block;margin-right:7px;color:var(--muted);font-size:10px}
 .detail-relations .linkbtn{margin-top:0;margin-bottom:0}
-.detail-fields{grid-column:1/-1;display:grid;grid-template-columns:minmax(150px,.7fr) minmax(180px,1fr) minmax(300px,2fr) auto;gap:10px;border-top:1px solid var(--border);padding-top:10px}
+.detail-fields{grid-column:1/-1;display:grid;grid-template-columns:minmax(150px,.7fr) minmax(180px,1fr) minmax(300px,2fr) auto;gap:8px 10px;border-top:1px solid var(--border);padding-top:8px}
 .detail-fields>label:nth-child(1){grid-column:1}.detail-fields>label:nth-child(2){grid-column:2}.detail-fields>label:nth-child(3){grid-column:3/5}
 .detail-fields .detail-notes{grid-column:1/4}
-.detail-fields .detail-actions{grid-column:4;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;gap:8px;min-width:max-content;padding-top:15px}
+.detail-fields .detail-actions{grid-column:4;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;gap:7px;min-width:max-content;padding-top:13px}
 .detail-fields .detail-actions .tab,.detail-fields .detail-actions .control{white-space:nowrap}
-.detail-fields .detail-actions .save-state{text-align:right;min-height:12px}
+.breeder-blocked-icon{display:inline-block;margin-right:7px;font-size:21px;font-weight:900;line-height:.6;vertical-align:-2px;color:#b7655f}.detail-fields .detail-actions button:disabled{cursor:not-allowed;color:#9d716d;border-color:#69433f;background:#241b19}
 .detail-fields label{display:block;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
 .detail-fields input,.detail-fields textarea{display:block;width:100%;margin-top:4px;background:#1b1e18;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 8px;font:inherit;font-size:11px;text-transform:none;letter-spacing:normal}
-.detail-fields textarea{min-height:56px;resize:vertical}
+.detail-fields textarea{min-height:48px;resize:vertical}
 .detail-fields input:focus,.detail-fields textarea:focus,.detail-fields select:focus{outline:1px solid #9f8354;border-color:#9f8354}
 .detail-fields select{display:block;width:100%;margin-top:4px;background:#1b1e18;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:7px 8px;font:inherit;font-size:11px;text-transform:none;letter-spacing:normal}
-.detail-save{display:flex;align-items:center;gap:9px;justify-content:flex-end}
+.detail-save{display:flex;align-items:center;gap:9px;justify-content:flex-end;white-space:nowrap}
 .save-state{font-size:10px;color:var(--active);min-width:42px}
 .lineage-head{padding:10px 16px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:minmax(180px,1fr) auto minmax(180px,1fr);align-items:center;gap:18px;background:linear-gradient(90deg,rgba(164,135,74,.08),transparent 45%)}
 .lineage-head .visual-controls{justify-self:center;padding-left:0;border-left:0}
@@ -173,8 +179,10 @@ svg{display:block;min-width:100%;}
  header{flex-direction:column}
  .badges{justify-content:flex-start}
  .detail-card{grid-template-columns:1fr}
- .detail-meta,.detail-relations{grid-column:1}
+ .detail-meta{grid-column:1}
  .detail-fields{grid-template-columns:1fr}
+ .detail-fields>*{grid-column:1!important}
+ .detail-lower{grid-template-columns:1fr}
  .detail-relations{flex-direction:column;gap:8px}
  .view-nav{grid-template-columns:1fr;align-items:stretch}
  .view-nav .view-left,.view-nav .view-center,.view-nav .view-right{justify-self:start}
@@ -182,6 +190,7 @@ svg{display:block;min-width:100%;}
  .search-row .search,.search-row #desc{grid-column:1}
  .lineage-head{grid-template-columns:1fr;align-items:start}
  .lineage-head .visual-controls,.lineage-head #countText{justify-self:start;text-align:left}
+ .breeding-pair-panel{grid-template-columns:1fr}.breeding-pair-symbol{display:none}.breeding-pair-actions{justify-content:flex-start}
 }
 </style>
 </head>
@@ -189,7 +198,7 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.31.1 LOCAL</span></h1>
+    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.32.3 LOCAL</span></h1>
     <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
   </div>
   <div class="badges">
@@ -239,6 +248,17 @@ svg{display:block;min-width:100%;}
     <div class="detail-toolbar"><span>Selected pet</span><button class="control detail-clear" id="clearBtn" title="Clear the current selection">Clear selection</button></div>
     <aside class="detail" id="detail"><div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div></aside>
   </div>
+
+  <section class="breeding-pair-panel" aria-labelledby="breedingPairTitle">
+    <div><strong id="breedingPairTitle">Next Breeding Pair</strong><span class="small" id="breedingPairState"></span></div>
+    <div class="breeding-pair-slot female-slot"><span>Female</span><b id="nextFemaleName">Not selected</b></div>
+    <div class="breeding-pair-symbol">×</div>
+    <div class="breeding-pair-slot male-slot"><span>Male</span><b id="nextMaleName">Not selected</b></div>
+    <div class="breeding-pair-actions">
+      <button class="control primary-control" id="sendBreedingPairBtn" disabled>Send to Breeding Panel</button>
+      <button class="control" id="clearBreedingPairBtn">Clear</button>
+    </div>
+  </section>
 
   <div class="search-row">
     <input id="search" class="search" type="search" placeholder="Search a pet, bloodline, stat, role or note…">
@@ -404,7 +424,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.31.1 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// V0.32.3 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -436,6 +456,10 @@ const usefulChecks = document.getElementById('usefulChecks');
 const usefulConfigTitle = document.getElementById('usefulConfigTitle');
 const showInactiveBoardInput = document.getElementById('showInactiveBoard');
 const breedingCountHint = document.getElementById('breedingCountHint');
+const nextFemaleName=document.getElementById('nextFemaleName');
+const nextMaleName=document.getElementById('nextMaleName');
+const breedingPairState=document.getElementById('breedingPairState');
+const sendBreedingPairBtn=document.getElementById('sendBreedingPairBtn');
 let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=false,showInactiveBreeding=false;
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -1003,7 +1027,7 @@ function renderSelectedDetail(id){
   detail.innerHTML=`
     <div class="detail-card">
       <div class="detail-identity">
-        <h2>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</h2>
+        <h2><span>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</span><span class="detail-uid">(${esc(n.icarus_uid??'—')})</span></h2>
         <div class="small">${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'} · ${esc(n.bloodline)} · ${presenceLabel(n)} · Breeding: ${activityLabel(n)}${n.role?` · Role: ${esc(n.role)}`:''}</div>
       </div>
       <div class="stats">${statHtml}</div>
@@ -1012,7 +1036,6 @@ function renderSelectedDetail(id){
         <div class="item"><span class="label">${usefulLabel(nodeSpeciesKey(n))}</span><span class="value">${n.usefulScore??'—'}</span></div>
         <div class="item"><span class="label">Level</span><span class="value">${n.level??'—'}</span></div>
         <div class="item"><span class="label">Experience</span><span class="value">${n.experience??'—'}</span></div>
-        <div class="item"><span class="label">Icarus UID</span><span class="value" title="${esc(n.icarus_uid??'—')}">${n.icarus_uid??'—'}</span></div>
       </div>
       <div class="detail-fields">
         <label>Nickname<input data-detail-field="nickname" value="${esc(n.nickname||'')}" placeholder="Optional nickname"></label>
@@ -1020,15 +1043,17 @@ function renderSelectedDetail(id){
         <label>Role<select data-detail-field="role">${roleOptionsHtml(n.role)}</select></label>
         <label class="detail-notes">Notes<textarea data-detail-field="notes" placeholder="Personal notes">${esc(n.notes||'')}</textarea></label>
         <div class="detail-actions">
+          ${breedingSelectionButtonHtml(n)}
           <button class="tab" id="detailAddRoleBtn" title="Create a custom pet role">+ Add role</button>
-          <button class="control primary-control" id="saveDetailBtn">Save annotations</button>
-          <span class="save-state" id="detailSaveState"></span>
         </div>
       </div>
-      <div class="detail-relations">
-        <div class="relation-group"><span class="relation-label">Parents</span>${parentButtons}</div>
-        <div class="relation-group"><span class="relation-label">Siblings (${siblings.length})</span>${siblingButtons}</div>
-        <div class="relation-group"><span class="relation-label">Offspring</span>${childButtons}</div>
+      <div class="detail-lower">
+        <div class="detail-relations">
+          <div class="relation-group"><span class="relation-label">Parents</span>${parentButtons}</div>
+          <div class="relation-group"><span class="relation-label">Siblings (${siblings.length})</span>${siblingButtons}</div>
+          <div class="relation-group"><span class="relation-label">Offspring</span>${childButtons}</div>
+        </div>
+        <div class="detail-save"><span class="save-state" id="detailSaveState"></span><button class="control primary-control" id="saveDetailBtn">Save annotations</button></div>
       </div>
     </div>`;
   detail.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>jumpToNode(b.dataset.id)));
@@ -1043,6 +1068,7 @@ function renderSelectedDetail(id){
   };
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
   document.getElementById('detailAddRoleBtn').addEventListener('click',promptAddRole);
+  document.getElementById('setBreedingSelectionBtn')?.addEventListener('click',()=>setBreedingSelection(n));
   detail.querySelector('[data-detail-field="notes"]').addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();saveDetail()}
   });
@@ -1252,6 +1278,8 @@ let lastJsonText=null;
 let refreshInFlight=false;
 let currentPayload=null;
 let userDataDirty=false;
+let breedingPanel={female_uid:null,male_uid:null};
+let breedingPanelDirty=false;
 const importBadge=document.getElementById('importBadge');
 const saveChoicesBtn=document.getElementById('saveChoicesBtn');
 
@@ -1300,6 +1328,69 @@ function hydrateGraphUserData(payload){
     localStorage.setItem(BOARD_KEY,JSON.stringify(boardEdits));
   }
 }
+
+function persistentIcarusUid(value){
+  const uid=numericUid(value);
+  return uid!==null&&Number.isInteger(uid)&&uid>=0?uid:null;
+}
+
+function hydrateBreedingPanel(payload){
+  const panel=payload?.breeding_panel;
+  breedingPanel={
+    female_uid:persistentIcarusUid(panel?.female_uid),
+    male_uid:persistentIcarusUid(panel?.male_uid)
+  };
+}
+
+function selectedPetName(uid){
+  if(uid===null)return 'Not selected';
+  const pet=currentPayload?.pets?.find(item=>persistentIcarusUid(item.icarus_uid)===uid);
+  return pet&&canonicalName(pet.name)?canonicalName(pet.name):'[MISSING]';
+}
+
+function renderBreedingPairPanel(){
+  const femaleUid=breedingPanel.female_uid,maleUid=breedingPanel.male_uid;
+  nextFemaleName.textContent=femaleUid===null?'Not selected':`${selectedPetName(femaleUid)} (${femaleUid})`;
+  nextMaleName.textContent=maleUid===null?'Not selected':`${selectedPetName(maleUid)} (${maleUid})`;
+  breedingPairState.textContent=breedingPanelDirty?'Pending — not sent':'';
+  const complete=femaleUid!==null&&maleUid!==null;
+  sendBreedingPairBtn.disabled=!complete;
+  sendBreedingPairBtn.classList.toggle('active',complete&&breedingPanelDirty);
+}
+
+function breedingSelectionButtonHtml(n){
+  if(n.sex!=='F'&&n.sex!=='M')return '';
+  const uid=persistentIcarusUid(n.icarus_uid);
+  const side=n.sex==='F'?'female':'male';
+  const selected=uid!==null&&breedingPanel[`${side}_uid`]===uid;
+  const missing=n.historical||n.isPresent===false;
+  const disabledReason=uid===null?'A persistent non-negative Icarus UID is required':missing?'/!\\ this animal is missing':'';
+  const inactiveTitle=!disabledReason&&!n.breedingActive?'/!\\ warning this animal is inactive; confirmation required':'';
+  const blockedIcon=disabledReason?'<span class="breeder-blocked-icon" aria-hidden="true">⊘</span>':'';
+  return `<button class="control${disabledReason?'':' primary-control'}" id="setBreedingSelectionBtn"${disabledReason?' disabled':''}${inactiveTitle?` title="${esc(inactiveTitle)}"`:''}>${blockedIcon}${selected?'Selected as next':`Set as next ${side}`}</button>`;
+}
+
+function setBreedingSelection(n){
+  const uid=persistentIcarusUid(n.icarus_uid);
+  if(uid===null||n.historical||n.isPresent===false||(n.sex!=='F'&&n.sex!=='M'))return;
+  let activated=false;
+  if(!n.breedingActive){
+    const confirmed=confirm(`/!\\ Warning: this animal is inactive.\n\nAdd ${displayName(n)} as next breeder anyway?`);
+    if(!confirmed)return;
+    const edits=loadBoardEdits(),key=boardKey(n);
+    edits[key]=edits[key]||{};
+    edits[key].breedingActive=true;
+    saveBoardEdits(edits);
+    applyBoardEdits();
+    markUserDataDirty();
+    activated=true;
+  }
+  breedingPanel[n.sex==='F'?'female_uid':'male_uid']=uid;
+  breedingPanelDirty=true;
+  renderBreedingPairPanel();
+  if(activated){updateCategoryNavigation();render()}
+  renderSelectedDetail(n.id);
+}
 const LOCAL_JSON_NAME='Icarus_pets.json';
 const DIRECTORY_DB='icarus-pedigree-local-source';
 const DIRECTORY_STORE='handles';
@@ -1347,6 +1438,7 @@ function applyIcarusJson(payload){
   connectEmpty.hidden=true;
 
   if(!userDataDirty)hydrateGraphUserData(payload);
+  if(!breedingPanelDirty)hydrateBreedingPanel(payload);
   currentPayload=payload;
   if(userDataDirty)syncGraphUserData();
 
@@ -1428,7 +1520,7 @@ function applyIcarusJson(payload){
   importBadge.textContent=`JSON: ${validPets.length} pets · ${speciesCount} species · ${new Date().toLocaleDateString('en-GB')}`;
   rebuildIndex();rebuildRelationshipIndexes();applyBoardEdits();rebuildNavigationCatalog();
   if(!speciesKeys().includes(currentSpecies))currentSpecies=defaultSpeciesKey();
-  updateCategoryNavigation();render();
+  updateCategoryNavigation();render();renderBreedingPairPanel();
 }
 
 function openDirectoryDb(){
@@ -1474,25 +1566,59 @@ async function rememberDirectory(handle){
   }
 }
 
-async function readDirectoryJson(handle,requestPermission=false){
+async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   if(!handle)return null;
-  let permission=await handle.queryPermission({mode:'read'});
-  if(permission!=='granted' && requestPermission)permission=await handle.requestPermission({mode:'read'});
+  let permission=await handle.queryPermission({mode});
+  if(permission!=='granted' && requestPermission)permission=await handle.requestPermission({mode});
   if(permission!=='granted')return null;
   const entry=await handle.getFileHandle(LOCAL_JSON_NAME);
   return (await entry.getFile()).text();
 }
 
 function serializeIcarusJson(payload){
-  const rows=payload.pets.map(p=>`    ${JSON.stringify(p)}`);
-  return '{\n'+
-    '  "schema":"IcarusPetGenetics",\n'+
-    '  "schema_version":5,\n'+
-    '  "genetics_order":["V","F","P","R","T","A","I"],\n'+
-    '  "pets":[\n'+rows.map((row,index)=>row+(index<rows.length-1?',':'')).join('\n')+'\n'+
-    '  ],\n'+
-    '  "user_data":'+JSON.stringify(payload.user_data||{})+'\n'+
-    '}\n';
+  const entries=Object.entries(payload).map(([key,value])=>{
+    if(key==='pets'&&Array.isArray(value)){
+      const rows=value.map(p=>`    ${JSON.stringify(p)}`);
+      return `  "pets":[\n${rows.map((row,index)=>row+(index<rows.length-1?',':'')).join('\n')}\n  ]`;
+    }
+    return `  ${JSON.stringify(key)}:${JSON.stringify(value)}`;
+  });
+  return `{\n${entries.map((entry,index)=>entry+(index<entries.length-1?',':'')).join('\n')}\n}\n`;
+}
+
+async function writableJsonEntry(){
+  if(!('showDirectoryPicker' in window))throw new Error('Sending requires folder access in a Chromium browser');
+  const handle=localDirectoryHandle;
+  if(!handle)throw new Error('Click Connect / Refresh first, then try again');
+  let permission=await handle.queryPermission({mode:'readwrite'});
+  if(permission!=='granted')permission=await handle.requestPermission({mode:'readwrite'});
+  if(permission!=='granted')throw new Error('File modification permission was not granted');
+  return handle.getFileHandle(LOCAL_JSON_NAME);
+}
+
+function validateV5Payload(payload){
+  if(payload?.schema!=='IcarusPetGenetics'||Number(payload.schema_version)!==5||!Array.isArray(payload.pets)){
+    throw new Error('Local Icarus_pets.json is not a valid V5 file');
+  }
+}
+
+async function sendBreedingPanel(){
+  const entry=await writableJsonEntry();
+  const latestPayload=JSON.parse(await (await entry.getFile()).text());
+  validateV5Payload(latestPayload);
+  latestPayload.breeding_panel={
+    female_uid:breedingPanel.female_uid,
+    male_uid:breedingPanel.male_uid
+  };
+  const text=serializeIcarusJson(latestPayload);
+  const writable=await entry.createWritable();
+  await writable.write(text);
+  await writable.close();
+  breedingPanelDirty=false;
+  currentPayload=latestPayload;
+  lastJsonText=text;
+  applyIcarusJson(latestPayload);
+  breedingPairState.textContent='Sent to Icarus_pets.json';
 }
 
 function downloadJson(text){
@@ -1575,7 +1701,7 @@ async function refreshJson(force=false,allowPicker=false){
     const saved=await loadSavedDirectory().catch(err=>{folderError=err;return null});
     if(saved){
       try{
-        text=await readDirectoryJson(saved,allowPicker);
+        text=await readDirectoryJson(saved,allowPicker,allowPicker?'readwrite':'read');
         if(text)source='local';
       }catch(err){
         folderError=err;
@@ -1585,8 +1711,8 @@ async function refreshJson(force=false,allowPicker=false){
 
     if(!text && allowPicker && 'showDirectoryPicker' in window){
       try{
-        const chosen=await window.showDirectoryPicker({mode:'read'});
-        text=await readDirectoryJson(chosen,true);
+        const chosen=await window.showDirectoryPicker({mode:'readwrite'});
+        text=await readDirectoryJson(chosen,true,'readwrite');
         if(text){
           source='local';
           await rememberDirectory(chosen);
@@ -1702,9 +1828,26 @@ wrap.addEventListener('scroll',hideTooltip,{passive:true});
 window.addEventListener('blur',hideTooltip);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hideTooltip()});
 document.getElementById('clearBtn').addEventListener('click',()=>{selected=null;detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div>';render()});
+document.getElementById('clearBreedingPairBtn').addEventListener('click',()=>{
+  breedingPanel={female_uid:null,male_uid:null};
+  breedingPanelDirty=true;
+  renderBreedingPairPanel();
+  refreshSelectedDetail();
+});
+sendBreedingPairBtn.addEventListener('click',async()=>{
+  try{
+    sendBreedingPairBtn.disabled=true;
+    breedingPairState.textContent='Reading latest local JSON…';
+    await sendBreedingPanel();
+  }catch(err){
+    breedingPairState.textContent=`Not sent: ${err.message||String(err)}`;
+  }finally{
+    sendBreedingPairBtn.disabled=breedingPanel.female_uid===null||breedingPanel.male_uid===null;
+  }
+});
 search.addEventListener('input',()=>{selected=null;render({selectFirst:true})});
 window.addEventListener('resize',()=>render());
-applyBoardEdits();updateCategoryNavigation();render();
+applyBoardEdits();updateCategoryNavigation();render();renderBreedingPairPanel();
 </script>
 </body>
 </html>
