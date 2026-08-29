@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.32.3 local-only</title>
+<title>Icarus — Pet Pedigree & Breeding Board — V0.32.4 local-only</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -198,7 +198,7 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.32.3 LOCAL</span></h1>
+    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.32.4 LOCAL</span></h1>
     <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
   </div>
   <div class="badges">
@@ -424,7 +424,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.32.3 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// V0.32.4 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -1350,8 +1350,8 @@ function selectedPetName(uid){
 
 function renderBreedingPairPanel(){
   const femaleUid=breedingPanel.female_uid,maleUid=breedingPanel.male_uid;
-  nextFemaleName.textContent=femaleUid===null?'Not selected':`${selectedPetName(femaleUid)} (${femaleUid})`;
-  nextMaleName.textContent=maleUid===null?'Not selected':`${selectedPetName(maleUid)} (${maleUid})`;
+  nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
+  nextMaleName.textContent=maleUid===null?'Not selected':selectedPetName(maleUid);
   breedingPairState.textContent=breedingPanelDirty?'Pending — not sent':'';
   const complete=femaleUid!==null&&maleUid!==null;
   sendBreedingPairBtn.disabled=!complete;
