@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Icarus — Pet Pedigree & Breeding Board — V0.32.4 local-only</title>
+<title>Breeding Tool — V1.0.0</title>
 <style>
 :root {
   --bg:#151713;--panel:#1d2019;--card:#282b22;--card2:#30342a;--text:#f1ead9;--muted:#aaa58f;
@@ -198,14 +198,15 @@ svg{display:block;min-width:100%;}
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Icarus — Pet Pedigree & Breeding Board <span class="version">V0.32.4 LOCAL</span></h1>
-    <div class="subtitle">Interactive pedigrees generated from Icarus_pets.json. Parent links are created only when supported by exported data; no ancestry is invented.</div>
+    <h1>Breeding Tool <span class="version">V1.0.0</span></h1>
+    <div class="subtitle">Private pedigrees and breeding tools generated locally from BreedingTool.json.</div>
   </div>
   <div class="badges">
     <span class="badge" id="speciesBadge">Species: Snow Wolf</span>
     <span class="badge" id="populationBadge">Population: —</span>
     <span class="badge" id="importBadge">JSON: not connected</span>
-    <button class="control primary-control" id="refreshBtn" title="Select or reload a local Icarus_pets.json folder">Connect / Refresh</button>
+    <button class="control primary-control" id="refreshBtn" title="Select the BreedingTool mod folder or reload its census">Connect folder</button>
+    <button class="control" id="disconnectBtn" title="Forget the selected local folder" hidden>Disconnect</button>
   </div>
 </header>
 
@@ -232,7 +233,7 @@ svg{display:block;min-width:100%;}
     <button class="tab" id="usefulConfigBtn" title="Choose which stats count toward the Useful score">Useful stats</button>
   </div>
   <div class="view-right">
-    <button class="control" id="saveChoicesBtn" title="Write graph choices under user_data in Icarus_pets.json">Save choices</button>
+    <button class="control" id="saveChoicesBtn" title="Write Breeding Board choices to BreedingTool.json">Save choices</button>
   </div>
 </div>
 
@@ -281,15 +282,15 @@ svg{display:block;min-width:100%;}
     <div class="canvas-wrap" id="canvasWrap" title="Click and drag to move around the pedigree">
       <div class="connect-empty" id="connectEmpty">
         <h2>Connect your local pet census</h2>
-        <p>Click <strong>Connect / Refresh</strong> and select the folder containing your local <strong>Icarus_pets.json</strong>.</p>
-        <p>The graph never reads the GitHub copy. That copy exists only to give Kiro access to the census.</p>
+        <p>Click <strong>Connect folder</strong>, select the <strong>BreedingTool</strong> mod folder and grant read/write access. F7 will then populate its census.</p>
+        <p>The browser can access only the folder you authorize. All census and planning data stays on this computer.</p>
       </div>
       <svg id="tree" aria-label="Interactive pet pedigree"></svg>
     </div>
     <div class="table-wrap" id="breedingTableWrap">
       <div class="breeding-options"><label><input id="showInactiveBoard" type="checkbox"> Show inactive breeding pets</label><span id="breedingCountHint"></span></div>
       <table class="breeding-table" id="breedingTable"></table>
-      <div class="table-hint">Presence comes only from the latest F7 census. Breeding status, nickname, role and notes are independent choices saved under user_data in Icarus_pets.json.</div>
+      <div class="table-hint">Presence comes only from the latest F7 census. Breeding status, nickname, role and notes are independent choices saved by the Breeding Board.</div>
     </div>
     <div class="legend">
       <span><i class="dot" style="background:var(--female)"></i>maternal line</span>
@@ -299,7 +300,7 @@ svg{display:block;min-width:100%;}
     </div>
   </section>
 </div>
-<div class="footer">Local data only. The graph never reads the pushed GitHub copy. Automatic refresh: 60 seconds after folder access is granted. Genetics order: V/F/P/R/T/A/I.</div>
+<div class="footer">Local data only. Automatic refresh: 60 seconds after folder access is granted. Genetics order: V/F/P/R/T/A/I.</div>
 </div>
 <div class="tooltip" id="tooltip"></div>
 <input id="jsonFileFallback" type="file" accept="application/json,.json" hidden>
@@ -344,7 +345,7 @@ function classifyPetOrigin(pet){
     .some(value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value)));
   const hasParentName=[pet?.mother,pet?.father]
     .some(value=>String(value||'').trim()!=='');
-  return hasParentUid||hasParentName?'bred':'wild';
+  return hasParentUid||hasParentName?'bred':'foundation';
 }
 
 function buildNavigationCatalog(nodes,childrenByParentId){
@@ -364,7 +365,7 @@ function buildNavigationCatalog(nodes,childrenByParentId){
 
   for(const node of nodes){
     const hasStableUid=node.icarus_uid!==null&&node.icarus_uid!==undefined&&node.icarus_uid!==''&&Number.isFinite(Number(node.icarus_uid));
-    if(node.originKind!=='wild'||!hasStableUid)continue;
+    if(node.originKind!=='foundation'||!hasStableUid)continue;
     const speciesKey=node.species_key||'Unknown';
     const branch=descendantIdsFrom(node.id,childrenByParentId,childId=>{
       const child=nodeById.get(childId);
@@ -424,7 +425,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// V0.32.4 contains no embedded pets. Every node is rebuilt from a selected local Icarus_pets.json.
+// The board contains no embedded census. Every node is rebuilt from BreedingTool.json.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -477,7 +478,7 @@ function automaticInactiveReason(n){
   return '';
 }
 function sexRank(n){return n.sex==='F'?0:n.sex==='M'?2:1}
-function statsText(n){return n.stats ? n.stats.join(' / ') : '—'}
+function statsText(n){return n.stats ? n.stats.map(value=>value??'—').join(' / ') : '—'}
 function offspringOf(id){return (childrenByParentId.get(id)||[]).map(childId=>byId.get(childId)).filter(Boolean)}
 function siblingsOf(n){return (siblingsById.get(n.id)||[]).map(id=>byId.get(id)).filter(Boolean)}
 
@@ -544,8 +545,6 @@ function speciesLabel(key){
 
 const STAT_LABELS=['V','F','P','R','T','A','I'];
 const DEFAULT_USEFUL_MASK=[true,true,true,true,true,true,false];
-const PREFS_KEY='icarus_pedigree_preferences_v1';
-
 function normalizeCategoryBucket(value){
   value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
   return {
@@ -556,35 +555,23 @@ function normalizeCategoryBucket(value){
 
 function normalizePreferences(value){
   value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
-  const legacySpecies={order:value.speciesOrder,manualHidden:value.hiddenSpecies};
   const navigation=value.navigation&&typeof value.navigation==='object'?value.navigation:{};
   const perSpecies=source=>Object.fromEntries(Object.entries(source&&typeof source==='object'?source:{})
     .map(([speciesKey,bucket])=>[speciesKey,normalizeCategoryBucket(bucket)]));
   return {
     usefulStats:value.usefulStats&&typeof value.usefulStats==='object'?value.usefulStats:{},
     customRoles:Array.isArray(value.customRoles)?value.customRoles:[],
-    annotationVersion:Number(value.annotationVersion)||0,
     navigation:{
-      species:normalizeCategoryBucket(navigation.species||legacySpecies),
+      species:normalizeCategoryBucket(navigation.species),
       bloodlines:perSpecies(navigation.bloodlines),
       foundations:perSpecies(navigation.foundations)
     }
   };
 }
 
-function loadPreferences(){
-  try{
-    const saved=JSON.parse(localStorage.getItem(PREFS_KEY)||'null');
-    if(saved && typeof saved==='object')return normalizePreferences(saved);
-    return normalizePreferences({hiddenSpecies:JSON.parse(localStorage.getItem('icarus_pedigree_hidden_species_v2')||'[]')});
-  }catch{}
-  return normalizePreferences({});
-}
-
-const preferences=loadPreferences();
+const preferences=normalizePreferences({});
 
 function savePreferences(){
-  localStorage.setItem(PREFS_KEY,JSON.stringify(preferences));
   markUserDataDirty();
 }
 
@@ -615,7 +602,7 @@ function usefulScore(n){
   return (n.stats||[]).reduce((sum,value,index)=>sum+(mask[index]?Number(value)||0:0),0);
 }
 function recomputeUsefulScores(speciesKey=currentSpecies){
-  for(const n of DATA.nodes)if(nodeSpeciesKey(n)===speciesKey)n.usefulScore=usefulScore(n);
+  for(const n of DATA.nodes)if(nodeSpeciesKey(n)===speciesKey)n.usefulScore=n.total7===null?null:usefulScore(n);
 }
 
 function currentSpeciesNodes(){
@@ -1018,7 +1005,7 @@ function statClass(index,val,speciesKey=currentSpecies){
 function renderSelectedDetail(id){
   const n=byId.get(id); if(!n)return;
   const inactiveLock=n.breedingInactiveReason||automaticInactiveReason(n);
-  const statHtml=(n.stats||[]).map((v,i)=>`<div class="stat ${statClass(i,v,nodeSpeciesKey(n))}"><label>${STAT_LABELS[i]}</label><b>${v}</b></div>`).join('');
+  const statHtml=(n.stats||[]).map((v,i)=>`<div class="stat ${statClass(i,v,nodeSpeciesKey(n))}"><label>${STAT_LABELS[i]}</label><b>${v??'—'}</b></div>`).join('');
   const kids=offspringOf(id);
   const siblings=siblingsOf(n);
   const parentButtons=[n.mother,n.father].filter(Boolean).map(pid=>byId.get(pid)).filter(Boolean).map(p=>`<button class="linkbtn" data-id="${esc(p.id)}">${esc(displayName(p))}</button>`).join('')||'<span class="small">None</span>';
@@ -1100,7 +1087,6 @@ function showTooltip(n,x,y){
 }
 function hideTooltip(){tooltip.style.display='none'}
 
-const BOARD_KEY='icarus_pet_annotations_v1';
 const DEFAULT_ROLES=['Retired','Reserve','Experimental'];
 let boardSort={key:'usefulScore',dir:-1};
 let boardEdits=null;
@@ -1108,37 +1094,22 @@ let boardEdits=null;
 function boardKey(n){return String(n.icarus_uid??n.id)}
 function normalizeBoardEdits(edits){
   edits=edits&&typeof edits==='object'&&!Array.isArray(edits)?edits:{};
-  const legacyRoles={ACTIVE:'',ACTIVE_EXP:'Experimental',RESERVE:'Reserve',CULLED:'Retired',LEGACY:'Retired'};
-  const legacyBreeding={ACTIVE:true,ACTIVE_EXP:true,RESERVE:true,CULLED:false,LEGACY:false};
   for(const e of Object.values(edits)){
     if(!e||typeof e!=='object')continue;
     if(typeof e.breedingActive!=='boolean' && typeof e.breeding_status==='string'){
       e.breedingActive=e.breeding_status.toLowerCase()==='active';
     }
     if(typeof e.role!=='string' && typeof e.breeding_role==='string')e.role=e.breeding_role;
-    if('status' in e){
-      if(!e.role && legacyRoles[e.status])e.role=legacyRoles[e.status];
-      if(typeof e.breedingActive!=='boolean')e.breedingActive=legacyBreeding[e.status]??true;
-      delete e.status;
-    }
-  }
-  if(preferences.annotationVersion<2){
-    for(const e of Object.values(edits)){
-      if(e&&typeof e==='object'&&typeof e.breedingActive!=='boolean'&&e.role==='Retired')e.breedingActive=false;
-    }
-    preferences.annotationVersion=2;
   }
   return edits;
 }
 function loadBoardEdits(){
   if(boardEdits)return boardEdits;
-  try{boardEdits=normalizeBoardEdits(JSON.parse(localStorage.getItem(BOARD_KEY)||'{}'))}
-  catch{boardEdits={}}
+  boardEdits={};
   return boardEdits;
 }
 function saveBoardEdits(edits){
   boardEdits=normalizeBoardEdits(edits);
-  localStorage.setItem(BOARD_KEY,JSON.stringify(boardEdits));
   markUserDataDirty();
 }
 function applyBoardEdits(){
@@ -1274,6 +1245,7 @@ function promptAddRole(){
 }
 
 const LOCAL_POLL_MS=60000;
+const EXPECTED_GENETICS=['V','F','P','R','T','A','I'];
 let lastJsonText=null;
 let refreshInFlight=false;
 let currentPayload=null;
@@ -1282,6 +1254,8 @@ let breedingPanel={female_uid:null,male_uid:null};
 let breedingPanelDirty=false;
 const importBadge=document.getElementById('importBadge');
 const saveChoicesBtn=document.getElementById('saveChoicesBtn');
+const refreshBtn=document.getElementById('refreshBtn');
+const disconnectBtn=document.getElementById('disconnectBtn');
 
 function encodedAnnotations(){
   const encoded={};
@@ -1321,11 +1295,9 @@ function hydrateGraphUserData(payload){
     const normalized=normalizePreferences(graph.preferences);
     for(const key of Object.keys(preferences))delete preferences[key];
     Object.assign(preferences,normalized);
-    localStorage.setItem(PREFS_KEY,JSON.stringify(preferences));
   }
   if(graph.annotations&&typeof graph.annotations==='object'&&!Array.isArray(graph.annotations)){
     boardEdits=normalizeBoardEdits(JSON.parse(JSON.stringify(graph.annotations)));
-    localStorage.setItem(BOARD_KEY,JSON.stringify(boardEdits));
   }
 }
 
@@ -1391,8 +1363,8 @@ function setBreedingSelection(n){
   if(activated){updateCategoryNavigation();render()}
   renderSelectedDetail(n.id);
 }
-const LOCAL_JSON_NAME='Icarus_pets.json';
-const DIRECTORY_DB='icarus-pedigree-local-source';
+const LOCAL_JSON_NAME='BreedingTool.json';
+const DIRECTORY_DB='breeding-tool-local-source';
 const DIRECTORY_STORE='handles';
 let localDirectoryHandle=null;
 
@@ -1427,14 +1399,8 @@ function nameKey(species,name){
   return `${species}\u0000${canonicalName(name).toLocaleLowerCase()}`;
 }
 
-function applyIcarusJson(payload){
-  if(!payload || payload.schema!=='IcarusPetGenetics' || !Array.isArray(payload.pets)){
-    throw new Error('Unrecognized file: IcarusPetGenetics schema expected.');
-  }
-  if(Number(payload.schema_version)!==5)throw new Error('IcarusPetGenetics schema version 5 expected.');
-  if(JSON.stringify(payload.genetics_order)!==JSON.stringify(['V','F','P','R','T','A','I'])){
-    throw new Error('Unexpected Genetics order.');
-  }
+function applyCensus(payload){
+  validateCensus(payload);
   connectEmpty.hidden=true;
 
   if(!userDataDirty)hydrateGraphUserData(payload);
@@ -1442,11 +1408,13 @@ function applyIcarusJson(payload){
   currentPayload=payload;
   if(userDataDirty)syncGraphUserData();
 
-  const validPets=payload.pets.filter(p=>
-    Array.isArray(p.genetics) && p.genetics.length===7 &&
-    p.genetics.every(value=>Number.isFinite(Number(value))) &&
-    (p.species_key||p.actor_class)
-  );
+  const validPets=payload.pets.filter(p=>{
+    const uid=numericUid(p.icarus_uid);
+    const historical=uid===null||uid<0||p.historical===true;
+    return Array.isArray(p.genetics) && p.genetics.length===7 &&
+      p.genetics.every(value=>historical?(value===null||Number.isFinite(Number(value))):Number.isFinite(Number(value))) &&
+      (p.species_key||p.actor_class);
+  });
   const nodes=[];
   const importedByUid=new Map();
   const importedByPet=new Map();
@@ -1456,7 +1424,7 @@ function applyIcarusJson(payload){
   for(const [sourceIndex,p] of validPets.entries()){
     const uid=numericUid(p.icarus_uid);
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
-    const stats=p.genetics.map(Number);
+    const stats=p.genetics.map(value=>value===null?null:Number(value));
     const historical=uid===null||uid<0;
     const isPresent=typeof p.present==='boolean'?p.present:true;
     const n={
@@ -1469,15 +1437,15 @@ function applyIcarusJson(payload){
       sex:p.sex==='Female'?'F':p.sex==='Male'?'M':'?',
       bloodline:p.lineage||'Unknown',
       stats,
-      level:Number.isFinite(Number(p.level))?Number(p.level):null,
-      experience:Number.isFinite(Number(p.experience))?Number(p.experience):null,
+      level:p.level!==null&&p.level!==undefined&&Number.isFinite(Number(p.level))?Number(p.level):null,
+      experience:p.experience!==null&&p.experience!==undefined&&Number.isFinite(Number(p.experience))?Number(p.experience):null,
       isPresent:historical?null:isPresent,
       historical,
       role:'',notes:'',mother:null,father:null
     };
     n.originKind=classifyPetOrigin(p);
-    n.total7=n.stats.reduce((a,b)=>a+b,0);
-    n.usefulScore=usefulScore(n);
+    n.total7=n.stats.every(Number.isFinite)?n.stats.reduce((a,b)=>a+b,0):null;
+    n.usefulScore=n.total7===null?null:usefulScore(n);
     nodes.push(n);
     importedByPet.set(p,n);
     if(uid!==null)importedByUid.set(uid,n);
@@ -1547,7 +1515,6 @@ async function loadSavedDirectory(){
 }
 
 async function saveDirectory(handle){
-  localDirectoryHandle=handle;
   const db=await openDirectoryDb();
   if(!db)return;
   await new Promise((resolve,reject)=>{
@@ -1556,6 +1523,30 @@ async function saveDirectory(handle){
     request.onerror=()=>reject(request.error);
   });
   db.close();
+}
+
+async function forgetDirectory(){
+  localDirectoryHandle=null;
+  const db=await openDirectoryDb();
+  if(!db)return;
+  await new Promise((resolve,reject)=>{
+    const request=db.transaction(DIRECTORY_STORE,'readwrite').objectStore(DIRECTORY_STORE).delete('json-folder');
+    request.onsuccess=()=>resolve();
+    request.onerror=()=>reject(request.error);
+  });
+  db.close();
+}
+
+function bounded(promise,timeoutMs,message){
+  return Promise.race([
+    promise,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error(message)),timeoutMs))
+  ]);
+}
+
+function updateConnectionControls(){
+  refreshBtn.textContent=localDirectoryHandle?'Refresh':'Connect folder';
+  disconnectBtn.hidden=!localDirectoryHandle;
 }
 
 async function rememberDirectory(handle){
@@ -1575,7 +1566,7 @@ async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   return (await entry.getFile()).text();
 }
 
-function serializeIcarusJson(payload){
+function serializeCensus(payload){
   const entries=Object.entries(payload).map(([key,value])=>{
     if(key==='pets'&&Array.isArray(value)){
       const rows=value.map(p=>`    ${JSON.stringify(p)}`);
@@ -1596,29 +1587,34 @@ async function writableJsonEntry(){
   return handle.getFileHandle(LOCAL_JSON_NAME);
 }
 
-function validateV5Payload(payload){
-  if(payload?.schema!=='IcarusPetGenetics'||Number(payload.schema_version)!==5||!Array.isArray(payload.pets)){
-    throw new Error('Local Icarus_pets.json is not a valid V5 file');
+function validateCensus(payload){
+  if(payload?.schema!=='BTPetCensus'||Number(payload.schema_version)!==1||!Array.isArray(payload.pets)
+    ||JSON.stringify(payload.genetics_order)!==JSON.stringify(EXPECTED_GENETICS)){
+    throw new Error('BreedingTool.json is not valid BTPetCensus data');
   }
+}
+
+async function updateCensusEntry(entry, update){
+  const payload=JSON.parse(await (await entry.getFile()).text());
+  validateCensus(payload);
+  update(payload);
+  const text=serializeCensus(payload);
+  const writable=await entry.createWritable();
+  await writable.write(text);
+  await writable.close();
+  return {payload,text};
 }
 
 async function sendBreedingPanel(){
   const entry=await writableJsonEntry();
-  const latestPayload=JSON.parse(await (await entry.getFile()).text());
-  validateV5Payload(latestPayload);
-  latestPayload.breeding_panel={
-    female_uid:breedingPanel.female_uid,
-    male_uid:breedingPanel.male_uid
-  };
-  const text=serializeIcarusJson(latestPayload);
-  const writable=await entry.createWritable();
-  await writable.write(text);
-  await writable.close();
+  const {payload,text}=await updateCensusEntry(entry,latest=>{
+    latest.breeding_panel={female_uid:breedingPanel.female_uid,male_uid:breedingPanel.male_uid};
+  });
   breedingPanelDirty=false;
-  currentPayload=latestPayload;
+  currentPayload=payload;
   lastJsonText=text;
-  applyIcarusJson(latestPayload);
-  breedingPairState.textContent='Sent to Icarus_pets.json';
+  applyCensus(payload);
+  breedingPairState.textContent='Sent to BreedingTool.json';
 }
 
 function downloadJson(text){
@@ -1645,21 +1641,14 @@ async function saveChoices(){
       await rememberDirectory(handle);
     }
     const entry=await handle.getFileHandle(LOCAL_JSON_NAME);
-    const latestPayload=JSON.parse(await (await entry.getFile()).text());
-    if(latestPayload?.schema!=='IcarusPetGenetics' || Number(latestPayload.schema_version)!==5 || !Array.isArray(latestPayload.pets)){
-      throw new Error('Local Icarus_pets.json is not a valid V5 file');
-    }
-    latestPayload.user_data=graphUserData;
-    outputPayload=latestPayload;
-    text=serializeIcarusJson(outputPayload);
-    const writable=await entry.createWritable();
-    await writable.write(text);
-    await writable.close();
-    importBadge.textContent='Saved locally — press F7 in game to sync for Kiro';
+    const updated=await updateCensusEntry(entry,latest=>{latest.user_data=graphUserData});
+    outputPayload=updated.payload;
+    text=updated.text;
+    importBadge.textContent='Choices saved locally to BreedingTool.json';
   }else{
-    text=serializeIcarusJson(outputPayload);
+    text=serializeCensus(outputPayload);
     downloadJson(text);
-    importBadge.textContent='Choices exported: replace Icarus_pets.json with the download';
+    importBadge.textContent='Choices exported: replace BreedingTool.json with the download';
   }
 
   currentPayload=outputPayload;
@@ -1667,7 +1656,7 @@ async function saveChoices(){
   userDataDirty=false;
   saveChoicesBtn.textContent='Save choices';
   saveChoicesBtn.classList.remove('active');
-  applyIcarusJson(currentPayload);
+  applyCensus(currentPayload);
 }
 
 async function pickJsonFile(){
@@ -1683,7 +1672,7 @@ async function applyJsonText(text,source,force){
   const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   if(text!==lastJsonText || force){
     const payload=JSON.parse(text);
-    applyIcarusJson(payload);
+    applyCensus(payload);
     lastJsonText=text;
     const count=Array.isArray(payload.pets)?payload.pets.length:0;
     importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
@@ -1692,74 +1681,86 @@ async function applyJsonText(text,source,force){
   }
 }
 
-async function refreshJson(force=false,allowPicker=false){
+async function connectDirectory(){
   if(refreshInFlight)return;
   refreshInFlight=true;
-  if(force)importBadge.textContent='JSON: refreshing…';
+  importBadge.textContent='JSON: selecting folder…';
   try{
-    let text=null,source='',folderError=null;
-    const saved=await loadSavedDirectory().catch(err=>{folderError=err;return null});
-    if(saved){
-      try{
-        text=await readDirectoryJson(saved,allowPicker,allowPicker?'readwrite':'read');
-        if(text)source='local';
-      }catch(err){
-        folderError=err;
-        if(err?.name!=='AbortError')console.warn('Saved local JSON folder unavailable:',err);
-      }
+    if('showDirectoryPicker' in window){
+      const chosen=await window.showDirectoryPicker({mode:'readwrite'});
+      const text=await readDirectoryJson(chosen,true,'readwrite');
+      if(!text)throw new Error('Folder access was not granted');
+      await applyJsonText(text,'local',true);
+      localDirectoryHandle=chosen;
+      updateConnectionControls();
+      void rememberDirectory(chosen);
+    }else{
+      const text=await pickJsonFile();
+      if(!text)throw new DOMException('Selection cancelled','AbortError');
+      await applyJsonText(text,'selected file',true);
     }
-
-    if(!text && allowPicker && 'showDirectoryPicker' in window){
-      try{
-        const chosen=await window.showDirectoryPicker({mode:'readwrite'});
-        text=await readDirectoryJson(chosen,true,'readwrite');
-        if(text){
-          source='local';
-          await rememberDirectory(chosen);
-        }
-      }catch(err){
-        folderError=err;
-        if(err?.name!=='AbortError'){
-          console.warn('Local JSON folder unavailable:',err);
-          importBadge.textContent=`JSON: ${err.name||'Error'}: ${err.message||String(err)}`;
-        }
-      }
-    }
-
-    if(!text && allowPicker){
-      try{
-        text=await pickJsonFile();
-        if(text)source='selected file';
-      }catch(err){
-        if(!folderError)folderError=err;
-        console.warn('Local JSON file unavailable:',err);
-      }
-    }
-
-    if(!text){
-      importBadge.textContent=folderError&&folderError.name!=='AbortError'
-        ?`JSON: ${folderError.name||'Error'}: ${folderError.message||String(folderError)}`
-        :force?'JSON: no local file selected':'JSON: not connected';
-      return;
-    }
-    await applyJsonText(text,source,force);
   }catch(err){
-    importBadge.textContent=`JSON: unavailable (${err.message})`;
-    console.warn('Icarus_pets.json unavailable:',err);
+    if(err?.name==='AbortError'){
+      importBadge.textContent=localDirectoryHandle?'JSON: current folder unchanged':'JSON: not connected';
+    }else{
+      importBadge.textContent=`JSON: invalid folder (${err.message})`;
+      console.warn('BreedingTool folder rejected:',err);
+    }
   }finally{
     refreshInFlight=false;
   }
 }
 
-document.getElementById('refreshBtn').addEventListener('click',()=>refreshJson(true,true));
+async function refreshJson(force=false){
+  if(refreshInFlight)return;
+  refreshInFlight=true;
+  if(force)importBadge.textContent='JSON: refreshing…';
+  try{
+    let handle=localDirectoryHandle;
+    if(!handle)handle=await bounded(loadSavedDirectory(),2000,'Saved folder lookup timed out');
+    if(!handle){
+      importBadge.textContent='JSON: not connected';
+      return;
+    }
+    const text=await readDirectoryJson(handle,force,force?'readwrite':'read');
+    if(!text){
+      importBadge.textContent='JSON: folder permission required';
+      return;
+    }
+    await applyJsonText(text,'local',force);
+    localDirectoryHandle=handle;
+    updateConnectionControls();
+  }catch(err){
+    updateConnectionControls();
+    importBadge.textContent=`JSON: unavailable (${err.message})`;
+    console.warn('BreedingTool.json unavailable:',err);
+  }finally{
+    refreshInFlight=false;
+  }
+}
+
+async function disconnectDirectory(){
+  try{
+    await bounded(forgetDirectory(),2000,'Folder removal timed out');
+  }catch(err){
+    localDirectoryHandle=null;
+    console.warn('Could not remove the saved folder handle:',err);
+  }
+  updateConnectionControls();
+  importBadge.textContent=currentPayload?'JSON: disconnected · snapshot retained':'JSON: not connected';
+}
+
+refreshBtn.addEventListener('click',()=>localDirectoryHandle?refreshJson(true):connectDirectory());
+disconnectBtn.addEventListener('click',disconnectDirectory);
 saveChoicesBtn.addEventListener('click',()=>saveChoices().catch(err=>{
   if(err?.name!=='AbortError'){
     importBadge.textContent=`Choices not saved (${err.message})`;
-    console.warn('Icarus_pets.json choices not saved:',err);
+    console.warn('BreedingTool.json choices not saved:',err);
   }
 }));
 refreshJson();
-setInterval(()=>refreshJson(false,false),LOCAL_POLL_MS);
+updateConnectionControls();
+setInterval(()=>refreshJson(false),LOCAL_POLL_MS);
 
 function applyZoom(){
   if(!lastLayout)return;
