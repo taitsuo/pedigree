@@ -1,5 +1,6 @@
 const THEME_STORAGE_KEY='breeding-tool-theme';
 const THEME_NAMES=new Set(['default','rustic','concrete','glass','aluminium']);
+const UI_SCALE=1.1;
 
 function normalizeTheme(theme){
   return theme==='composite'?'aluminium':theme;
@@ -204,7 +205,10 @@ const searchClearBtn=document.getElementById('searchClearBtn');
 const selectedPetSummary=document.getElementById('selectedPetSummary');
 const visualControls=document.querySelector('.visual-controls');
 const siblingLegend=document.getElementById('siblingLegend');
-let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=true;
+const stickyTools=document.querySelector('.sticky-tools');
+const motherClustersBtn=document.getElementById('motherClustersBtn');
+const fatherClustersBtn=document.getElementById('fatherClustersBtn');
+let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=true,clusterParent='mother';
 const collapsedBlocks=new Map();
 
 function makeCollapsible(element,key,{keep=null,label='block'}={}){
@@ -479,7 +483,7 @@ function foundationForPet(pet){
     .find(descriptor=>descriptor.founderId===pet.id)||null;
 }
 
-function viewNodes(view=activeView,speciesKey=currentSpecies){
+function viewNodes(view=activeView,speciesKey=currentSpecies,{includeInactive=false}={}){
   const full=DATA.nodes.filter(n=>nodeSpeciesKey(n)===speciesKey);
   let ids=new Set(full.map(n=>n.id));
   if(view.kind==='bloodline'){
@@ -501,7 +505,7 @@ function viewNodes(view=activeView,speciesKey=currentSpecies){
   }else if(view.kind==='family'){
     ids=familyIdsForPet(byId.get(view.key));
   }
-  return full.filter(n=>ids.has(n.id)&&(!hideInactive||n.breedingActive));
+  return full.filter(n=>ids.has(n.id)&&(includeInactive||!hideInactive||n.breedingActive));
 }
 
 function getVisibleNodes(){
@@ -519,25 +523,220 @@ function computeGenerations(list){
   return generationMap(list,byId);
 }
 
-function layoutNodes(list){
-  const gen=computeGenerations(list);
-  const groups=new Map();
-  for(const n of list){
-    const g=gen.get(n.id);
-    if(!groups.has(g))groups.set(g,[]);
-    groups.get(g).push(n);
+function layoutUid(n){
+  const uid=Number(n?.icarus_uid);
+  return n?.icarus_uid!==null&&n?.icarus_uid!==undefined&&n?.icarus_uid!==''&&Number.isFinite(uid)
+    ? uid
+    : Number.POSITIVE_INFINITY;
+}
+
+function stableLayoutCompare(a,b){
+  const ua=layoutUid(a),ub=layoutUid(b);
+  if(ua!==ub)return ua<ub?-1:1;
+  return String(a?.id||'').localeCompare(String(b?.id||''),'en',{numeric:true});
+}
+
+function firstSeenSortValue(n){
+  const value=n?.firstSeen;
+  if(value===null||value===undefined||value==='')return Number.POSITIVE_INFINITY;
+  if(typeof value==='number'&&Number.isFinite(value))return value;
+  if(typeof value==='string'){
+    const numeric=Number(value);
+    if(Number.isFinite(numeric))return numeric;
+    const parsed=Date.parse(value);
+    if(Number.isFinite(parsed))return parsed;
   }
-  for(const arr of groups.values()){
-    arr.sort((a,b)=> {
-      const sa=a.breedingActive?0:1, sb=b.breedingActive?0:1;
-      return sexRank(a)-sexRank(b) || sa-sb || (b.usefulScore??-1)-(a.usefulScore??-1) || a.name.localeCompare(b.name);
-    });
+  return Number.POSITIVE_INFINITY;
+}
+
+function layoutPairKey(a,b){
+  return [a||'x',b||'x'].join('|');
+}
+
+function layoutTwinSignature(n){
+  return [
+    n.mother||'x',n.father||'x',n.sex,String(n.bloodline||'Unknown').toLocaleLowerCase(),
+    (n.stats||[]).map(value=>value===null||value===undefined?'?':String(value)).join(',')
+  ].join('|');
+}
+
+function directFamilyData(list){
+  const childCount=new Map(),partners=new Map(),pairChildren=new Map();
+  const addPartner=(a,b)=>{
+    if(!a||!b)return;
+    if(!partners.has(a))partners.set(a,new Set());
+    partners.get(a).add(b);
+  };
+  for(const child of list){
+    for(const parentId of [child.mother,child.father]){
+      if(parentId)childCount.set(parentId,(childCount.get(parentId)||0)+1);
+    }
+    if(child.mother&&child.father){
+      addPartner(child.mother,child.father);addPartner(child.father,child.mother);
+      const key=layoutPairKey(...[child.mother,child.father].sort());
+      pairChildren.set(key,(pairChildren.get(key)||0)+1);
+    }
+  }
+  return {childCount,partners,pairChildren};
+}
+
+function reproductivePairWeight(a,b,pairChildren){
+  if(!a||!b)return 0;
+  return pairChildren.get(layoutPairKey(...[a,b].sort()))||0;
+}
+
+function orderFounderGeneration(g0,list,parentField){
+  const governingSex=parentField==='mother'?'F':'M';
+  const {childCount,partners,pairChildren}=directFamilyData(list);
+  const g0Ids=new Set(g0.map(n=>n.id)),localById=new Map(g0.map(n=>[n.id,n]));
+  const governingWithoutChildren=[],breeders=[],rest=[];
+  for(const n of g0){
+    if((childCount.get(n.id)||0)>0)breeders.push(n);
+    else if(n.sex===governingSex)governingWithoutChildren.push(n);
+    else rest.push(n);
+  }
+  governingWithoutChildren.sort(stableLayoutCompare);rest.sort(stableLayoutCompare);
+
+  const breederIds=new Set(breeders.map(n=>n.id));
+  const adjacency=new Map(breeders.map(n=>[n.id,new Set()]));
+  for(const n of breeders){
+    for(const partnerId of partners.get(n.id)||[]){
+      if(breederIds.has(partnerId)&&g0Ids.has(partnerId))adjacency.get(n.id).add(partnerId);
+    }
+  }
+
+  const seen=new Set(),components=[];
+  for(const n of breeders.slice().sort(stableLayoutCompare)){
+    if(seen.has(n.id))continue;
+    const stack=[n.id],component=[];seen.add(n.id);
+    while(stack.length){
+      const id=stack.pop();component.push(localById.get(id));
+      for(const peerId of adjacency.get(id)||[]){
+        if(!seen.has(peerId)){seen.add(peerId);stack.push(peerId)}
+      }
+    }
+    components.push(component);
+  }
+
+  const childScore=n=>childCount.get(n.id)||0;
+  const orient=path=>{
+    if(path.length<2)return path;
+    const first=path[0],last=path[path.length-1];
+    const firstGoverning=first.sex===governingSex?1:0,lastGoverning=last.sex===governingSex?1:0;
+    if(lastGoverning>firstGoverning)return [...path].reverse();
+    if(firstGoverning===lastGoverning&&stableLayoutCompare(last,first)<0)return [...path].reverse();
+    return path;
+  };
+
+  const seriate=component=>{
+    if(component.length<=1)return component.slice();
+    let bestEdge=null;
+    for(let i=0;i<component.length;i++)for(let j=i+1;j<component.length;j++){
+      const a=component[i],b=component[j],weight=reproductivePairWeight(a.id,b.id,pairChildren);
+      if(weight<=0)continue;
+      const tie=[weight,childScore(a)+childScore(b),(a.sex===governingSex?1:0)+(b.sex===governingSex?1:0),-Math.min(layoutUid(a),layoutUid(b))];
+      if(!bestEdge||tie[0]>bestEdge.tie[0]||tie[0]===bestEdge.tie[0]&&tie[1]>bestEdge.tie[1]||tie[0]===bestEdge.tie[0]&&tie[1]===bestEdge.tie[1]&&tie[2]>bestEdge.tie[2]||tie[0]===bestEdge.tie[0]&&tie[1]===bestEdge.tie[1]&&tie[2]===bestEdge.tie[2]&&tie[3]>bestEdge.tie[3])bestEdge={a,b,tie};
+    }
+    const remaining=new Map(component.map(n=>[n.id,n]));
+    let path;
+    if(bestEdge){path=[bestEdge.a,bestEdge.b];remaining.delete(bestEdge.a.id);remaining.delete(bestEdge.b.id)}
+    else{
+      const seed=component.slice().sort((a,b)=>childScore(b)-childScore(a)||(a.sex===governingSex?0:1)-(b.sex===governingSex?0:1)||stableLayoutCompare(a,b))[0];
+      path=[seed];remaining.delete(seed.id);
+    }
+    while(remaining.size){
+      let best=null;
+      for(const n of remaining.values())for(let position=0;position<=path.length;position++){
+        const left=position?path[position-1]:null,right=position<path.length?path[position]:null;
+        const gain=reproductivePairWeight(left?.id,n.id,pairChildren)+reproductivePairWeight(n.id,right?.id,pairChildren)-reproductivePairWeight(left?.id,right?.id,pairChildren);
+        const connected=path.reduce((sum,peer)=>sum+reproductivePairWeight(peer.id,n.id,pairChildren),0);
+        const candidate={n,position,gain,connected,children:childScore(n),governing:n.sex===governingSex?1:0};
+        if(!best||candidate.gain>best.gain||candidate.gain===best.gain&&candidate.connected>best.connected||candidate.gain===best.gain&&candidate.connected===best.connected&&candidate.children>best.children||candidate.gain===best.gain&&candidate.connected===best.connected&&candidate.children===best.children&&candidate.governing>best.governing||candidate.gain===best.gain&&candidate.connected===best.connected&&candidate.children===best.children&&candidate.governing===best.governing&&stableLayoutCompare(candidate.n,best.n)<0)best=candidate;
+      }
+      path.splice(best.position,0,best.n);remaining.delete(best.n.id);
+    }
+    return orient(path);
+  };
+
+  const orderedComponents=components.map(component=>{
+    const path=seriate(component);
+    return {path,first:path.slice().sort(stableLayoutCompare)[0]};
+  }).sort((a,b)=>stableLayoutCompare(a.first,b.first));
+  return [...governingWithoutChildren,...orderedComponents.flatMap(component=>component.path),...rest];
+}
+
+function computeStructuralOrder(list,parentField=clusterParent){
+  const structuralIds=new Set(list.map(n=>n.id));
+  const generations=computeGenerations(list),nodesByGeneration=new Map(),orderedByGeneration=new Map(),anchorById=new Map();
+  for(const n of list){
+    const generation=generations.get(n.id)||0;
+    if(!nodesByGeneration.has(generation))nodesByGeneration.set(generation,[]);
+    nodesByGeneration.get(generation).push(n);
+  }
+  const maxGeneration=nodesByGeneration.size?Math.max(...nodesByGeneration.keys()):0;
+  orderedByGeneration.set(0,orderFounderGeneration(nodesByGeneration.get(0)||[],list,parentField));
+
+  for(let generation=1;generation<=maxGeneration;generation++){
+    const previous=orderedByGeneration.get(generation-1)||[];
+    const previousIndex=new Map(previous.map((n,index)=>[n.id,index]));
+    const clusters=new Map();
+    for(const n of nodesByGeneration.get(generation)||[]){
+      const preferredId=parentField==='mother'?n.mother:n.father;
+      const otherId=parentField==='mother'?n.father:n.mother;
+      const preferredIsPrevious=preferredId&&structuralIds.has(preferredId)&&generations.get(preferredId)===generation-1;
+      const otherIsPrevious=otherId&&structuralIds.has(otherId)&&generations.get(otherId)===generation-1;
+      const anchorId=preferredIsPrevious?preferredId:otherIsPrevious?otherId:null;
+      anchorById.set(n.id,anchorId);
+      const key=anchorId?`anchor:${anchorId}`:`orphan:${n.id}`;
+      if(!clusters.has(key))clusters.set(key,{key,anchorId,anchorIndex:anchorId?previousIndex.get(anchorId):Number.POSITIVE_INFINITY,nodes:[]});
+      clusters.get(key).nodes.push(n);
+    }
+    const orderedClusters=[...clusters.values()].sort((a,b)=>a.anchorIndex-b.anchorIndex||(a.anchorId&&b.anchorId?stableLayoutCompare(byId.get(a.anchorId),byId.get(b.anchorId)):a.anchorId?-1:b.anchorId?1:a.key.localeCompare(b.key,'en',{numeric:true})));
+    const row=[];
+    for(const cluster of orderedClusters){
+      const siblingsByParents=new Map();
+      for(const n of cluster.nodes){
+        const key=layoutPairKey(n.mother,n.father);
+        if(!siblingsByParents.has(key))siblingsByParents.set(key,[]);
+        siblingsByParents.get(key).push(n);
+      }
+      const siblingGroups=[...siblingsByParents.values()].map(group=>{
+        const sample=group[0],anchorId=anchorById.get(sample.id);
+        const otherId=sample.mother===anchorId?sample.father:sample.mother;
+        const equivalents=new Map();
+        for(const n of group){
+          const signature=layoutTwinSignature(n);
+          if(!equivalents.has(signature))equivalents.set(signature,[]);
+          equivalents.get(signature).push(n);
+        }
+        const equivalentGroups=[...equivalents.values()];
+        equivalentGroups.forEach(bucket=>bucket.sort(stableLayoutCompare));
+        equivalentGroups.sort((a,b)=>{
+          const firstA=Math.min(...a.map(firstSeenSortValue)),firstB=Math.min(...b.map(firstSeenSortValue));
+          return firstA-firstB||stableLayoutCompare(a.slice().sort(stableLayoutCompare)[0],b.slice().sort(stableLayoutCompare)[0]);
+        });
+        const nodes=equivalentGroups.flat();
+        return {otherId,otherPreviousIndex:otherId&&previousIndex.has(otherId)?previousIndex.get(otherId):Number.POSITIVE_INFINITY,firstSeen:firstSeenSortValue(nodes[0]),first:nodes.slice().sort(stableLayoutCompare)[0],nodes};
+      });
+      siblingGroups.sort((a,b)=>a.otherPreviousIndex-b.otherPreviousIndex||(a.otherId&&b.otherId?stableLayoutCompare(byId.get(a.otherId),byId.get(b.otherId)):a.otherId?-1:b.otherId?1:0)||a.firstSeen-b.firstSeen||stableLayoutCompare(a.first,b.first));
+      row.push(...siblingGroups.flatMap(group=>group.nodes));
+    }
+    orderedByGeneration.set(generation,row);
+  }
+  return {orderedByGeneration,maxGeneration,anchorById};
+}
+
+function layoutNodes(structuralList,visibleList=structuralList){
+  const structure=computeStructuralOrder(structuralList);
+  const visibleIds=new Set(visibleList.map(n=>n.id)),groups=new Map();
+  for(let generation=0;generation<=structure.maxGeneration;generation++){
+    groups.set(generation,(structure.orderedByGeneration.get(generation)||[]).filter(n=>visibleIds.has(n.id)));
   }
   const gens=[...groups.keys()].sort((a,b)=>a-b);
-  const nodeW=176,nodeH=66,gapX=24,gapY=135,margin=34;
+  const nodeW=176,nodeH=66,gapX=24,gapY=68,margin=34;
   const maxCount=Math.max(1,...[...groups.values()].map(a=>a.length));
-  const width=Math.max(wrap.clientWidth-2, margin*2 + maxCount*(nodeW+gapX));
-  const height=margin*2 + (Math.max(...gens,0)+1)*(nodeH+gapY);
+  const width=Math.max(wrap.clientWidth/UI_SCALE-2, margin*2 + maxCount*(nodeW+gapX));
+  const height=margin*2 + (structure.maxGeneration+1)*(nodeH+gapY);
   const pos=new Map();
   for(const g of gens){
     const arr=groups.get(g);
@@ -546,7 +745,7 @@ function layoutNodes(list){
     const y=margin+g*(nodeH+gapY);
     for(const n of arr){pos.set(n.id,{x,y,w:nodeW,h:nodeH,g});x+=nodeW+gapX}
   }
-  return {pos,width,height,ids:new Set(list.map(n=>n.id))};
+  return {pos,width,height,ids:visibleIds,structure};
 }
 
 function svgEl(name,attrs={}){
@@ -882,6 +1081,21 @@ advisorBtn.addEventListener('click',()=>switchToolView('advisor'));
 inactiveToggleBtn.addEventListener('click',()=>{
   hideInactive=!hideInactive;
   updateCategoryNavigation();render();refreshSelectedDetail();
+});
+
+function syncClusterParentToggle(){
+  const female=clusterParent==='mother';
+  motherClustersBtn.classList.toggle('active',female);
+  fatherClustersBtn.classList.toggle('active',!female);
+  motherClustersBtn.setAttribute('aria-pressed',String(female));
+  fatherClustersBtn.setAttribute('aria-pressed',String(!female));
+}
+
+motherClustersBtn.addEventListener('click',()=>{
+  clusterParent='mother';syncClusterParentToggle();render();refreshSelectedDetail();
+});
+fatherClustersBtn.addEventListener('click',()=>{
+  clusterParent='father';syncClusterParentToggle();render();refreshSelectedDetail();
 });
 
 
@@ -1317,7 +1531,8 @@ function render({selectFirst=false}={}){
   }
   breedingTableWrap.style.display='none';
   wrap.style.display='block';
-  const list=getVisibleNodes();
+  const structuralList=viewNodes(activeView,currentSpecies,{includeInactive:true});
+  const list=structuralList.filter(n=>!hideInactive||n.breedingActive);
   const query=search.value.trim().toLowerCase();
   const matchingIds=new Set(list.filter(node=>nodeMatchesSearch(node,query)).map(node=>node.id));
   setViewHeading(activeViewLabel(),activeViewDescription());
@@ -1328,18 +1543,21 @@ function render({selectFirst=false}={}){
       selected=null;
       detail.innerHTML='<div class="detail-placeholder">No pet matches the current category and search filters.</div>';
     }
-    tree.setAttribute('viewBox','0 0 800 280');
+    tree.setAttribute('viewBox',`0 0 ${800*UI_SCALE} ${280*UI_SCALE}`);
+    const emptyLayer=svgEl('g',{transform:`scale(${UI_SCALE})`});
     const t=svgEl('text',{x:400,y:140,'text-anchor':'middle',fill:'#9aa5ad','font-size':'14'});
     t.textContent='No results for this search.';
-    tree.appendChild(t); lastLayout=null; zoomLabel.textContent=`${Math.round(zoomScale*100)}%`; return;
+    emptyLayer.appendChild(t);tree.appendChild(emptyLayer); lastLayout=null; zoomLabel.textContent=`${Math.round(zoomScale*100)}%`; return;
   }
-  const L=layoutNodes(list); lastLayout=L;
+  const L=layoutNodes(structuralList,list); lastLayout=L;
   if(selectFirst)selected=firstLayoutNodeId(L,query?matchingIds:null);
   if(selectFirst&&query&&!selected){
     detail.innerHTML='<div class="detail-placeholder">No pet matches the current search. The complete pedigree remains visible for context.</div>';
   }
   const siblingIds=new Set(selected?(siblingsById.get(selected)||[]):[]);
-  tree.setAttribute('viewBox',`0 0 ${L.width} ${L.height}`);
+  tree.setAttribute('viewBox',`0 0 ${L.width*UI_SCALE} ${L.height*UI_SCALE}`);
+  const graphLayer=svgEl('g',{transform:`scale(${UI_SCALE})`});
+  tree.appendChild(graphLayer);
   applyZoom();
 
   // edges
@@ -1351,7 +1569,7 @@ function render({selectFirst=false}={}){
       const x1=p.x+p.w/2,y1=p.y+p.h,x2=child.x+child.w/2,y2=child.y;
       const mid=(y1+y2)/2;
       const path=svgEl('path',{d:`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`,class:`edge ${type}`});
-      tree.appendChild(path);
+      graphLayer.appendChild(path);
     }
   }
 
@@ -1371,7 +1589,7 @@ function render({selectFirst=false}={}){
         const left=L.pos.get(siblings[index-1].id),right=L.pos.get(siblings[index].id);
         const x1=left.x+left.w,y1=left.y+left.h/2,x2=right.x,y2=right.y+right.h/2;
         const bend=Math.max(18,Math.abs(x2-x1)*.22);
-        tree.appendChild(svgEl('path',{d:`M ${x1} ${y1} C ${x1+bend} ${y1}, ${x2-bend} ${y2}, ${x2} ${y2}`,class:'edge sibling'}));
+        graphLayer.appendChild(svgEl('path',{d:`M ${x1} ${y1} C ${x1+bend} ${y1}, ${x2-bend} ${y2}, ${x2} ${y2}`,class:'edge sibling'}));
       }
     }
   }
@@ -1379,7 +1597,7 @@ function render({selectFirst=false}={}){
   for(const n of list){
     const p=L.pos.get(n.id);
     const searchClass=query?(matchingIds.has(n.id)?' search-match':' search-muted'):'';
-    const g=svgEl('g',{class:`node ${activityClass(n)}${roleClass(n)}${selected===n.id?' selected':siblingIds.has(n.id)?' sibling-peer':''}${searchClass}`,transform:`translate(${p.x},${p.y})`,tabindex:'0',role:'button','aria-label':displayName(n)});
+    const g=svgEl('g',{class:`node ${activityClass(n)}${roleClass(n)}${selected===n.id?' selected':siblingIds.has(n.id)?' sibling-peer':''}${searchClass}`,transform:`translate(${p.x},${p.y})`,'data-node-id':n.id,tabindex:'0',role:'button','aria-label':displayName(n)});
     const rect=svgEl('rect',{class:'body',x:0,y:0,width:p.w,height:p.h});
     g.appendChild(rect);
     const sex=svgEl('text',{x:12,y:20,class:'sexmark',fill:n.sex==='F'?'#d8a3c2':n.sex==='M'?'#7eb5df':'#a7afb4'});
@@ -1392,11 +1610,11 @@ function render({selectFirst=false}={}){
     g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectNode(n.id)}});
     g.addEventListener('mousemove',e=>showTooltip(n,e.clientX,e.clientY));
     g.addEventListener('mouseleave',hideTooltip);
-    tree.appendChild(g);
+    graphLayer.appendChild(g);
   }
   if(selected&&L.pos.has(selected)){
     const p=L.pos.get(selected);
-    tree.appendChild(svgEl('rect',{class:'selection-outline',x:p.x-2,y:p.y-2,width:p.w+4,height:p.h+4,rx:6}));
+    graphLayer.appendChild(svgEl('rect',{class:'selection-outline',x:p.x-2,y:p.y-2,width:p.w+4,height:p.h+4,rx:6}));
   }
   if(selectFirst&&selected)renderSelectedDetail(selected);
 }
@@ -1433,12 +1651,12 @@ function renderSelectedDetail(id){
       <div class="detail-fields">
         <label>Nickname<input data-detail-field="nickname" value="${esc(n.nickname||'')}" placeholder="Optional nickname"></label>
         <label>Breeding status<select data-detail-field="breedingActive" ${inactiveLock?`disabled title="${esc(inactiveLock)}"`:''}><option value="true" ${n.breedingActive?'selected':''}>Active</option><option value="false" ${!n.breedingActive?'selected':''}>Inactive</option></select>${inactiveLock?`<span class="small">${esc(inactiveLock)}</span>`:''}</label>
-        <label>Role<select data-detail-field="role">${roleOptionsHtml(n.role)}</select></label>
+        <label class="detail-role">Role<select data-detail-field="role">${roleOptionsHtml(n.role)}</select></label>
         <label class="detail-notes">Notes<textarea data-detail-field="notes" placeholder="Personal notes">${esc(n.notes||'')}</textarea></label>
         <div class="detail-actions">
+          <button class="tab" id="detailAddRoleBtn" title="Create a custom pet role">+ Add role</button>
           ${breedingSelectionButtonHtml(n)}
           <button class="tab family-view-action" id="viewPetLineageBtn">${ownedFoundation?'See foundation':'See family'}</button>
-          <button class="tab" id="detailAddRoleBtn" title="Create a custom pet role">+ Add role</button>
         </div>
       </div>
       <div class="detail-lower">
@@ -1501,8 +1719,17 @@ function jumpToNode(id){
 }
 
 function scrollNodeIntoView(id){
-  const p=lastLayout?.pos.get(id); if(!p)return;
-  wrap.scrollTo({left:Math.max(0,p.x-wrap.clientWidth/2+p.w/2),top:Math.max(0,p.y-120),behavior:'smooth'});
+  if(!lastLayout?.pos.has(id))return;
+  const target=[...tree.querySelectorAll('.node')].find(node=>node.dataset.nodeId===id);
+  if(!target)return;
+  const targetRect=target.getBoundingClientRect(),wrapRect=wrap.getBoundingClientRect(),treeRect=tree.getBoundingClientRect();
+  const scaleX=tree.scrollWidth?treeRect.width/tree.scrollWidth:1;
+  const scaleY=tree.scrollHeight?treeRect.height/tree.scrollHeight:1;
+  const deltaX=(targetRect.left+targetRect.width/2)-(wrapRect.left+wrapRect.width/2);
+  const deltaY=(targetRect.top+targetRect.height/2)-(wrapRect.top+wrapRect.height/2);
+  const left=Math.max(0,Math.min(wrap.scrollWidth-wrap.clientWidth,wrap.scrollLeft+deltaX/scaleX));
+  const top=Math.max(0,Math.min(wrap.scrollHeight-wrap.clientHeight,wrap.scrollTop+deltaY/scaleY));
+  wrap.scrollTo({left,top,behavior:'smooth'});
 }
 function showTooltip(n,x,y){
   tooltip.innerHTML=`<strong>${esc(displayName(n))}</strong><div>${esc(n.bloodline)} · ${presenceLabel(n)} · Breeding: ${activityLabel(n)}${n.role?' · '+esc(n.role):''}</div><div class="ttstats">${statsText(n)}${n.total7!=null?` · ${scoreSummary(n)}`:''}</div>`;
@@ -1658,10 +1885,24 @@ function updateUsefulConfig(){
   }));
 }
 
+function setUsefulConfigOpen(open){
+  const button=document.getElementById('usefulConfigBtn');
+  if(open){
+    stickyTools.appendChild(usefulConfig);
+    usefulConfig.classList.add('visible');
+  }else{
+    usefulConfig.classList.remove('visible');
+    customizableBlocks.appendChild(usefulConfig);
+    applyBlockOrder();
+  }
+  button.classList.toggle('active',open);
+  button.setAttribute('aria-expanded',String(open));
+}
+
 document.getElementById('usefulConfigBtn').addEventListener('click',()=>{
-  usefulConfig.classList.toggle('visible');
-  document.getElementById('usefulConfigBtn').classList.toggle('active',usefulConfig.classList.contains('visible'));
-  updateUsefulConfig();
+  const open=!usefulConfig.classList.contains('visible');
+  setUsefulConfigOpen(open);
+  if(open)updateUsefulConfig();
 });
 document.getElementById('usefulResetBtn').addEventListener('click',()=>{
   delete preferences.usefulStats[currentSpecies]; savePreferences(); recomputeUsefulScores(); updateUsefulConfig();
@@ -1669,9 +1910,13 @@ document.getElementById('usefulResetBtn').addEventListener('click',()=>{
 });
 
 function promptAddRole(){
-  const value=prompt('New role name (for example: Carrier, Breeder, Resource):','');
+  const value=prompt('New role name — 30 characters maximum (for example: Carrier, Breeder, Resource):','');
   const role=String(value||'').trim();
   if(!role)return;
+  if([...role].length>30){
+    alert('Role names are limited to 30 characters, including spaces.');
+    return;
+  }
   const existing=allRoles().find(item=>item.toLocaleLowerCase()===role.toLocaleLowerCase());
   if(!existing){
     preferences.customRoles=[...(Array.isArray(preferences.customRoles)?preferences.customRoles:[]),role];
@@ -1904,6 +2149,7 @@ function applyCensus(payload){
       stats,
       level:p.level!==null&&p.level!==undefined&&Number.isFinite(Number(p.level))?Number(p.level):null,
       experience:p.experience!==null&&p.experience!==undefined&&Number.isFinite(Number(p.experience))?Number(p.experience):null,
+      firstSeen:p.first_seen??null,
       isPresent:historical?null:isPresent,
       historical,
       role:'',notes:'',mother:null,father:null
@@ -2231,8 +2477,8 @@ setInterval(()=>refreshJson(false),LOCAL_POLL_MS);
 
 function applyZoom(){
   if(!lastLayout)return;
-  tree.style.width=`${Math.max(lastLayout.width,wrap.clientWidth)*zoomScale}px`;
-  tree.style.height=`${lastLayout.height*zoomScale}px`;
+  tree.style.width=`${Math.max(lastLayout.width*UI_SCALE,wrap.clientWidth)*zoomScale}px`;
+  tree.style.height=`${lastLayout.height*UI_SCALE*zoomScale}px`;
   zoomLabel.textContent=`${Math.round(zoomScale*100)}%`;
 }
 
@@ -2243,8 +2489,8 @@ function setZoom(value){
 
 function fitTree(dimension='both'){
   if(!lastLayout)return;
-  const sx=(wrap.clientWidth-20)/Math.max(1,lastLayout.width);
-  const sy=(wrap.clientHeight-20)/Math.max(1,lastLayout.height);
+  const sx=(wrap.clientWidth-20)/Math.max(1,lastLayout.width*UI_SCALE);
+  const sy=(wrap.clientHeight-20)/Math.max(1,lastLayout.height*UI_SCALE);
   const scale=dimension==='width'?sx:dimension==='height'?sy:Math.min(sx,sy);
   setZoom(Math.min(1,scale));
   const left=dimension==='height'?Math.max(0,(tree.scrollWidth-wrap.clientWidth)/2):0;

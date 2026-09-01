@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V1.3.0 · Advisor P12</title>
+<title>Breeding Tool — V1.5.0 · Advisor P12</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V1.3.0 · ADVISOR P12</span></h1>
+    <h1>Breeding Tool <span class="version">V1.5.0 · ADVISOR P12</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated locally from BreedingTool.json.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -42,7 +42,7 @@
 </div>
 <div class="global-toolbar" aria-label="Global tools">
   <div class="global-toolbar-left">
-    <button class="tab" id="usefulConfigBtn" title="Choose the priority stats used by scoring and color coding">Priority stats</button>
+    <button class="tab" id="usefulConfigBtn" title="Choose the priority stats used by scoring and color coding" aria-expanded="false">Priority stats</button>
     <button class="control" id="inactiveToggleBtn" title="Show pets excluded from breeding" aria-pressed="false">Show inactive</button>
   </div>
   <div class="global-toolbar-right">
@@ -83,6 +83,11 @@
     <div class="lineage-head">
       <strong id="viewTitle">Complete pedigree</strong>
       <div class="controls visual-controls" aria-label="View controls">
+        <span class="control-label">Clusters</span>
+        <div class="cluster-parent-toggle" role="group" aria-label="Parent governing pedigree clusters">
+          <button class="control active" id="motherClustersBtn" type="button" aria-pressed="true" title="Group descendants by their female parent">Female</button>
+          <button class="control" id="fatherClustersBtn" type="button" aria-pressed="false" title="Group descendants by their male parent">Male</button>
+        </div>
         <span class="control-label">View</span>
         <button class="control" id="zoomOutBtn" title="Zoom out">−</button>
         <button class="control" id="zoomLabel" title="Current zoom">100%</button>
