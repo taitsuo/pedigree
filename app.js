@@ -538,7 +538,7 @@ function stableLayoutCompare(a,b){
 
 function firstSeenSortValue(n){
   const value=n?.firstSeen;
-  if(value===null||value===undefined||value==='')return Number.POSITIVE_INFINITY;
+  if(value===null||value===undefined||value==='')return Number.NEGATIVE_INFINITY;
   if(typeof value==='number'&&Number.isFinite(value))return value;
   if(typeof value==='string'){
     const numeric=Number(value);
