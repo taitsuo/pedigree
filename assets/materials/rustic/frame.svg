@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+<defs>
+  <linearGradient id="woodH" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#85542d"/><stop offset=".18" stop-color="#5c381f"/><stop offset=".7" stop-color="#3a2417"/><stop offset="1" stop-color="#1e130d"/>
+  </linearGradient>
+  <linearGradient id="woodV" x1="0" x2="1">
+    <stop offset="0" stop-color="#1d120c"/><stop offset=".28" stop-color="#3c2517"/><stop offset=".72" stop-color="#674026"/><stop offset="1" stop-color="#24150e"/>
+  </linearGradient>
+  <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".035 .18" numOctaves="2" seed="13"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="table" tableValues="0 .24"/></feComponentTransfer></filter>
+</defs>
+<rect width="192" height="32" fill="url(#woodH)"/>
+<rect y="160" width="192" height="32" fill="url(#woodH)" transform="rotate(180 96 176)"/>
+<rect width="32" height="192" fill="url(#woodV)"/>
+<rect x="160" width="32" height="192" fill="url(#woodV)" transform="rotate(180 176 96)"/>
+<g fill="#2a190f" stroke="#9b6637" stroke-width="2">
+  <rect x="0" y="0" width="32" height="32"/><rect x="160" y="0" width="32" height="32"/>
+  <rect x="0" y="160" width="32" height="32"/><rect x="160" y="160" width="32" height="32"/>
+</g>
+<g fill="#c49357" opacity=".62">
+  <circle cx="10" cy="10" r="2"/><circle cx="182" cy="10" r="2"/><circle cx="10" cy="182" r="2"/><circle cx="182" cy="182" r="2"/>
+</g>
+<g stroke="#bd7b3f" stroke-width="1" opacity=".28">
+  <path d="M39 10C75 4 112 17 151 9"/><path d="M39 181C76 174 115 187 151 178"/>
+  <path d="M10 39C4 75 17 112 9 151"/><path d="M181 39C174 76 187 115 178 151"/>
+</g>
+<rect width="192" height="192" filter="url(#grain)" opacity=".22"/>
+</svg>

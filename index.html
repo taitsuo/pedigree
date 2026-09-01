@@ -3,15 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V1.1.0 · Advisor P12</title>
+<title>Breeding Tool — V1.3.0 · Advisor P12</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V1.1.0 · ADVISOR P12</span></h1>
+    <h1>Breeding Tool <span class="version">V1.3.0 · ADVISOR P12</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated locally from BreedingTool.json.</div>
+    <div class="theme-picker" role="group" aria-label="Theme">
+      <span class="theme-label">Theme:</span>
+      <button type="button" class="theme-option" data-theme-choice="default" aria-pressed="true">Default</button>
+      <button type="button" class="theme-option" data-theme-choice="rustic" aria-pressed="false">Rustic</button>
+      <button type="button" class="theme-option" data-theme-choice="concrete" aria-pressed="false">Concrete</button>
+      <button type="button" class="theme-option" data-theme-choice="glass" aria-pressed="false">Glass</button>
+      <button type="button" class="theme-option" data-theme-choice="aluminium" aria-pressed="false">Aluminium</button>
+    </div>
   </div>
   <div class="badges">
     <span class="badge" id="speciesBadge">Species: Snow Wolf</span>

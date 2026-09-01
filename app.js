@@ -1,3 +1,39 @@
+const THEME_STORAGE_KEY='breeding-tool-theme';
+const THEME_NAMES=new Set(['default','rustic','concrete','glass','aluminium']);
+
+function normalizeTheme(theme){
+  return theme==='composite'?'aluminium':theme;
+}
+
+function applyTheme(theme,{persist=true}={}){
+  const normalized=normalizeTheme(theme);
+  const selected=THEME_NAMES.has(normalized)?normalized:'default';
+  document.documentElement.dataset.theme=selected;
+  document.querySelectorAll('[data-theme-choice]').forEach(button=>{
+    const active=button.dataset.themeChoice===selected;
+    button.classList.toggle('active',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+  if(persist){
+    try{localStorage.setItem(THEME_STORAGE_KEY,selected)}catch{}
+  }
+}
+
+function initializeThemeSelector(){
+  let saved='default';
+  try{
+    const stored=localStorage.getItem(THEME_STORAGE_KEY)||'default';
+    saved=normalizeTheme(stored);
+    if(stored==='composite')localStorage.setItem(THEME_STORAGE_KEY,saved);
+  }catch{}
+  applyTheme(saved,{persist:false});
+  document.querySelectorAll('[data-theme-choice]').forEach(button=>{
+    button.addEventListener('click',()=>applyTheme(button.dataset.themeChoice));
+  });
+}
+
+initializeThemeSelector();
+
 function buildRelationshipIndexes(nodes){
   const children=new Map(),siblings=new Map(),groups=new Map();
   for(const n of nodes){
@@ -1411,7 +1447,7 @@ function renderSelectedDetail(id){
           <div class="relation-group"><span class="relation-label">Siblings (${siblings.length})</span>${siblingButtons}</div>
           <div class="relation-group"><span class="relation-label">Offspring</span>${childButtons}</div>
         </div>
-        <div class="detail-save"><span class="save-state" id="detailSaveState"></span><button class="control primary-control" id="saveDetailBtn">Save annotations</button></div>
+        <div class="detail-save"><span class="save-state" id="detailSaveState"></span><button class="control" id="saveDetailBtn">Save annotations</button></div>
       </div>
     </div>`;
   detail.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>jumpToNode(b.dataset.id)));
@@ -1424,7 +1460,22 @@ function renderSelectedDetail(id){
     saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
     const state=document.getElementById('detailSaveState'); if(state)state.textContent='Saved ✓';
   };
+  const detailDraftChanged=()=>[...detail.querySelectorAll('[data-detail-field]')].some(el=>{
+    const field=el.dataset.detailField;
+    const draft=field==='breedingActive'?el.value==='true':el.value;
+    const saved=field==='breedingActive'?n.breedingActive:String(n[field]??'');
+    return draft!==saved;
+  });
+  const syncDetailSaveButton=()=>{
+    const button=document.getElementById('saveDetailBtn');
+    const changed=detailDraftChanged();
+    button.classList.toggle('primary-control',changed);
+    button.textContent=changed?'Save annotations *':'Save annotations';
+    if(changed){const state=document.getElementById('detailSaveState');if(state)state.textContent=''}
+  };
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
+  detail.querySelectorAll('[data-detail-field]').forEach(el=>el.addEventListener(el.matches('select')?'change':'input',syncDetailSaveButton));
+  syncDetailSaveButton();
   document.getElementById('viewPetLineageBtn').addEventListener('click',()=>openPetLineage(n,ownedFoundation));
   document.getElementById('detailAddRoleBtn').addEventListener('click',promptAddRole);
   document.getElementById('setBreedingSelectionBtn')?.addEventListener('click',()=>setBreedingSelection(n));

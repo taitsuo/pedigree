@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+<defs>
+  <linearGradient id="metalH" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#698087"/><stop offset=".14" stop-color="#2e3d42"/><stop offset=".64" stop-color="#111b1f"/><stop offset="1" stop-color="#050b0e"/>
+  </linearGradient>
+  <linearGradient id="metalV" x1="0" x2="1">
+    <stop offset="0" stop-color="#050b0e"/><stop offset=".3" stop-color="#172327"/><stop offset=".8" stop-color="#485e64"/><stop offset="1" stop-color="#0b1215"/>
+  </linearGradient>
+</defs>
+<rect width="192" height="24" fill="url(#metalH)"/>
+<rect y="168" width="192" height="24" fill="url(#metalH)" transform="rotate(180 96 180)"/>
+<rect width="24" height="192" fill="url(#metalV)"/>
+<rect x="168" width="24" height="192" fill="url(#metalV)" transform="rotate(180 180 96)"/>
+<g fill="#0c1519" stroke="#6b8b93" stroke-width="1.2">
+  <rect width="24" height="24"/><rect x="168" width="24" height="24"/>
+  <rect y="168" width="24" height="24"/><rect x="168" y="168" width="24" height="24"/>
+</g>
+<g fill="#8fb5bd" opacity=".7">
+  <circle cx="8" cy="8" r="1.5"/><circle cx="184" cy="8" r="1.5"/><circle cx="8" cy="184" r="1.5"/><circle cx="184" cy="184" r="1.5"/>
+</g>
+<g stroke="#9bd3db" stroke-width=".8" opacity=".24">
+  <path d="M30 5H162M30 187H162M5 30V162M187 30V162"/>
+</g>
+</svg>
