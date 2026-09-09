@@ -70,8 +70,8 @@ function descendantIdsFrom(founderId,childrenByParentId,accept=()=>true){
 }
 
 function classifyPetOrigin(pet){
-  const hasParentUid=[pet?.mother_uid,pet?.father_uid]
-    .some(value=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value)));
+  const hasParentUid=[pet?.mother_bt_id,pet?.father_bt_id]
+    .some(value=>stablePetId(value)!==null);
   const hasParentName=[pet?.mother,pet?.father]
     .some(value=>String(value||'').trim()!=='');
   return hasParentUid||hasParentName?'bred':'foundation';
@@ -93,7 +93,7 @@ function buildNavigationCatalog(nodes,childrenByParentId){
   }
 
   for(const node of nodes){
-    const hasStableUid=node.icarus_uid!==null&&node.icarus_uid!==undefined&&node.icarus_uid!==''&&Number.isFinite(Number(node.icarus_uid));
+    const hasStableUid=node.bt_id!==null&&node.bt_id!==undefined&&node.bt_id!==''&&stablePetId(node.bt_id)!==null;
     if(node.originKind!=='foundation'||!hasStableUid)continue;
     const speciesKey=node.species_key||'Unknown';
     const branch=descendantIdsFrom(node.id,childrenByParentId,childId=>{
@@ -103,8 +103,8 @@ function buildNavigationCatalog(nodes,childrenByParentId){
     branch.delete(node.id);
     if(!branch.size)continue;
     if(!foundationsBySpecies.has(speciesKey))foundationsBySpecies.set(speciesKey,new Map());
-    foundationsBySpecies.get(speciesKey).set(String(node.icarus_uid),{
-      kind:'foundation',key:String(node.icarus_uid),speciesKey,founderId:node.id,
+    foundationsBySpecies.get(speciesKey).set(String(node.bt_id),{
+      kind:'foundation',key:String(node.bt_id),speciesKey,founderId:node.id,
       descendantIds:branch,memberIds:new Set([node.id,...branch])
     });
   }
@@ -515,7 +515,7 @@ function getVisibleNodes(){
 function nodeMatchesSearch(n,query=search.value.trim().toLowerCase()){
   if(!query)return true;
   return [
-    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.icarus_uid??''),String(n.level??''),String(n.experience??'')
+    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.bt_id??''),String(n.level??''),String(n.experience??'')
   ].join(' ').toLowerCase().includes(query);
 }
 
@@ -524,10 +524,8 @@ function computeGenerations(list){
 }
 
 function layoutUid(n){
-  const uid=Number(n?.icarus_uid);
-  return n?.icarus_uid!==null&&n?.icarus_uid!==undefined&&n?.icarus_uid!==''&&Number.isFinite(uid)
-    ? uid
-    : Number.POSITIVE_INFINITY;
+  const first=n?.uid_history?.[0]?.uid;
+  return first!==undefined&&Number.isFinite(Number(first))?Number(first):Number.POSITIVE_INFINITY;
 }
 
 function stableLayoutCompare(a,b){
@@ -1109,7 +1107,7 @@ function advisorEligibleBreeders(){
   applyBoardEdits();
   return specialViewScopeNodes().filter(n=>
     (!hideInactive||n.breedingActive) && n.isPresent===true && !n.historical && nodeMatchesSearch(n) &&
-    persistentIcarusUid(n.icarus_uid)!==null && (n.sex==='F'||n.sex==='M')
+    stablePetId(n.bt_id)!==null && n.stage==='adult' && n.stats.every(Number.isFinite) && (n.sex==='F'||n.sex==='M')
   );
 }
 
@@ -1136,11 +1134,11 @@ function advisorCandidateGroups(breeders,sex){
   const groups=[];
   const bySignature=new Map();
   const sorted=breeders.filter(n=>n.sex===sex).slice().sort((a,b)=>
-    (persistentIcarusUid(a.icarus_uid)??Number.MAX_SAFE_INTEGER)-(persistentIcarusUid(b.icarus_uid)??Number.MAX_SAFE_INTEGER));
+    String(a.bt_id).localeCompare(String(b.bt_id)));
   for(const pet of sorted){
     const signature=advisorTwinSignature(pet);
     if(!signature){
-      groups.push({key:`uid:${persistentIcarusUid(pet.icarus_uid)}`,pets:[pet],representative:pet,equivalent:false});
+      groups.push({key:`uid:${stablePetId(pet.bt_id)}`,pets:[pet],representative:pet,equivalent:false});
       continue;
     }
     if(!bySignature.has(signature)){
@@ -1150,7 +1148,7 @@ function advisorCandidateGroups(breeders,sex){
     bySignature.get(signature).pets.push(pet);
   }
   for(const group of groups){
-    group.pets.sort((a,b)=>(persistentIcarusUid(a.icarus_uid)??0)-(persistentIcarusUid(b.icarus_uid)??0));
+    group.pets.sort((a,b)=>String(a.bt_id).localeCompare(String(b.bt_id)));
     group.representative=group.pets[0];
     // A single member is not visually presented as a twin/equivalent set.
     if(group.pets.length<2)group.equivalent=false;
@@ -1164,12 +1162,12 @@ function advisorPairKey(femaleGroup,maleGroup){
 
 function advisorSelectedMember(group,sex){
   const key=sex==='female'?'selectedFemaleUid':'selectedMaleUid';
-  const selectedUid=persistentIcarusUid(advisorState[key]);
-  const member=(group?.pets||[]).find(pet=>persistentIcarusUid(pet.icarus_uid)===selectedUid)
+  const selectedUid=stablePetId(advisorState[key]);
+  const member=(group?.pets||[]).find(pet=>stablePetId(pet.bt_id)===selectedUid)
     || group?.representative
     || group?.pets?.[0]
     || null;
-  advisorState[key]=member?persistentIcarusUid(member.icarus_uid):null;
+  advisorState[key]=member?stablePetId(member.bt_id):null;
   return member;
 }
 
@@ -1217,14 +1215,14 @@ function advisorStatHtml(n){
 function advisorGroupNamesHtml(group,sex){
   const pets=group?.pets?.length?group.pets:[group?.representative].filter(Boolean);
   if(pets.length<=1)return `<h3>${esc(displayName(pets[0]))}</h3>`;
-  return `<div class="advisor-twin-labels">${pets.map(pet=>`<span class="advisor-twin-label ${sex}" title="UID ${esc(pet.icarus_uid)}">${esc(displayName(pet))} (${esc(pet.icarus_uid)})</span>`).join('')}</div><div class="advisor-twin-note">Grouped genetically equivalent siblings · one representative UID is sent to the panel</div>`;
+  return `<div class="advisor-twin-labels">${pets.map(pet=>`<span class="advisor-twin-label ${sex}" title="UID ${esc(pet.bt_id)}">${esc(displayName(pet))} (${esc(pet.bt_id)})</span>`).join('')}</div><div class="advisor-twin-note">Grouped genetically equivalent siblings · one selected individual is sent to the panel</div>`;
 }
 
 function advisorParentHtml(n,sex,group=null){
   const equivalents=Math.max(0,(group?.pets?.length||1)-1);
   return `<div class="advisor-parent ${sex}" data-select-pet="${esc(n.id)}" role="button" tabindex="0">
     <div class="advisor-parent-head">
-      <div><h3>${esc(displayName(n))} (${esc(n.icarus_uid)})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'}</div></div>
+      <div><h3>${esc(displayName(n))} (${esc(n.bt_id)})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'}</div></div>
       <span class="sex" style="color:var(--${sex==='female'?'female':'male'})">${sex==='female'?'♀':'♂'}</span>
     </div>
     <div class="stats">${advisorStatHtml(n)}</div>
@@ -1437,12 +1435,12 @@ function renderAdvisor(){
   const candidateRows=(pair,index,sex)=>{
     const group=sex==='female'?pair.femaleGroup:pair.maleGroup;
     const partnerGroup=sex==='female'?pair.maleGroup:pair.femaleGroup;
-    const selectedUid=sex==='female'?persistentIcarusUid(chosen.female.icarus_uid):persistentIcarusUid(chosen.male.icarus_uid);
+    const selectedUid=sex==='female'?stablePetId(chosen.female.bt_id):stablePetId(chosen.male.bt_id);
     const partnerNames=(partnerGroup?.pets||[sex==='female'?pair.male:pair.female])
-      .map(member=>`${displayName(member)} (${member.icarus_uid})`).join(' / ');
+      .map(member=>`${displayName(member)} (${member.bt_id})`).join(' / ');
     const members=group?.pets?.length?group.pets:[sex==='female'?pair.female:pair.male];
     const buttons=members.map(member=>{
-      const uid=persistentIcarusUid(member.icarus_uid);
+      const uid=stablePetId(member.bt_id);
       return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(uid)})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
     }).join('');
     return `<div class="advisor-alt-row ${members.length>1?'twins':''}">${buttons}</div>`;
@@ -1476,7 +1474,7 @@ function renderAdvisor(){
   advisorContent.querySelectorAll('[data-advisor-candidate-side]').forEach(button=>button.addEventListener('click',()=>{
     const side=button.dataset.advisorCandidateSide;
     const groupKey=button.dataset.advisorGroup;
-    const uid=persistentIcarusUid(button.dataset.advisorUid);
+    const uid=stablePetId(button.dataset.advisorUid);
     const current=pairs.find(pair=>pair.key===advisorState.chosenPairKey)||chosenBase||pairs[0];
     const next=side==='female'
       ? pairs.find(pair=>pair.femaleGroup?.key===groupKey && pair.maleGroup?.key===current.maleGroup?.key)
@@ -1484,7 +1482,7 @@ function renderAdvisor(){
     if(!next||uid===null)return;
     advisorState.chosenPairKey=next.key;
     advisorState[side==='female'?'selectedFemaleUid':'selectedMaleUid']=uid;
-    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>persistentIcarusUid(item.icarus_uid)===uid);
+    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>stablePetId(item.bt_id)===uid);
     if(pet)selected=pet.id;
     renderAdvisor();
     refreshSelectedDetail();
@@ -1496,7 +1494,7 @@ function renderAdvisor(){
   });
   document.getElementById('advisorSendBtn').addEventListener('click',async()=>{
     // Twins/equivalent siblings remain independent selectable animals; send the exact selected UIDs.
-    breedingPanel={female_uid:persistentIcarusUid(chosen.female.icarus_uid),male_uid:persistentIcarusUid(chosen.male.icarus_uid)};
+    breedingPanel={female_bt_id:stablePetId(chosen.female.bt_id),male_bt_id:stablePetId(chosen.male.bt_id)};
     breedingPanelDirty=true;
     renderBreedingPairPanel();
     refreshSelectedDetail();
@@ -1625,9 +1623,12 @@ function statClass(index,val,speciesKey=currentSpecies){
   return val===10?'great':val>=8?'good':val<=2?'bad':'';
 }
 function renderSelectedDetail(id){
+  const focused=detail.contains(document.activeElement)&&detail.dataset.petId===id?document.activeElement:null;
+  const focusState=focused?.dataset.detailField?{field:focused.dataset.detailField,start:focused.selectionStart,end:focused.selectionEnd}:null;
+  detail.dataset.petId=id;
   const n=byId.get(id); if(!n)return;
   const ownedFoundation=foundationForPet(n);
-  selectedPetSummary.textContent=`${displayName(n)} (${n.icarus_uid??'—'}) · ${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'}`;
+  selectedPetSummary.textContent=`${displayName(n)} (${n.bt_id??'—'}) · ${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'}`;
   const inactiveLock=n.breedingInactiveReason||automaticInactiveReason(n);
   const statHtml=(n.stats||[]).map((v,i)=>`<div class="stat ${statClass(i,v,nodeSpeciesKey(n))}"><label>${STAT_LABELS[i]}</label><b>${v??'—'}</b></div>`).join('');
   const kids=offspringOf(id);
@@ -1638,7 +1639,7 @@ function renderSelectedDetail(id){
   detail.innerHTML=`
     <div class="detail-card">
       <div class="detail-identity">
-        <h2><span>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</span><span class="detail-uid">(${esc(n.icarus_uid??'—')})</span></h2>
+        <h2><span>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</span><span class="detail-uid">(${esc(n.bt_id??'—')})</span></h2><div class="small">Runtime UID: ${esc(n.runtime_uid??'—')} · ${esc(n.stage||'unknown')} · UID history: ${esc((n.uid_history||[]).map(h=>h.uid).join(' → '))}</div>
         <div class="small">${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'} · ${esc(n.bloodline)} · ${presenceLabel(n)} · Breeding: ${activityLabel(n)}${n.role?` · Role: ${esc(n.role)}`:''}</div>
       </div>
       <div class="stats">${statHtml}</div>
@@ -1675,7 +1676,7 @@ function renderSelectedDetail(id){
     detail.querySelectorAll('[data-detail-field]').forEach(el=>{
       edits[key][el.dataset.detailField]=el.dataset.detailField==='breedingActive'?el.value==='true':el.value;
     });
-    saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
+    detailDrafts.delete(id); saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
     const state=document.getElementById('detailSaveState'); if(state)state.textContent='Saved ✓';
   };
   const detailDraftChanged=()=>[...detail.querySelectorAll('[data-detail-field]')].some(el=>{
@@ -1687,13 +1688,21 @@ function renderSelectedDetail(id){
   const syncDetailSaveButton=()=>{
     const button=document.getElementById('saveDetailBtn');
     const changed=detailDraftChanged();
+    if(changed)detailDrafts.set(id,Object.fromEntries([...detail.querySelectorAll('[data-detail-field]')].map(el=>[el.dataset.detailField,el.value])));
+    else detailDrafts.delete(id);
     button.classList.toggle('primary-control',changed);
     button.textContent=changed?'Save annotations *':'Save annotations';
     if(changed){const state=document.getElementById('detailSaveState');if(state)state.textContent=''}
   };
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
   detail.querySelectorAll('[data-detail-field]').forEach(el=>el.addEventListener(el.matches('select')?'change':'input',syncDetailSaveButton));
+  const retainedDraft=detailDrafts.get(id);
+  if(retainedDraft)detail.querySelectorAll('[data-detail-field]').forEach(el=>{if(Object.hasOwn(retainedDraft,el.dataset.detailField))el.value=retainedDraft[el.dataset.detailField]});
   syncDetailSaveButton();
+  if(focusState){
+    const input=detail.querySelector('[data-detail-field="'+focusState.field+'"]');
+    if(input){input.focus({preventScroll:true});if(typeof input.setSelectionRange==='function'&&focusState.start!==null)input.setSelectionRange(focusState.start,focusState.end)}
+  }
   document.getElementById('viewPetLineageBtn').addEventListener('click',()=>openPetLineage(n,ownedFoundation));
   document.getElementById('detailAddRoleBtn').addEventListener('click',promptAddRole);
   document.getElementById('setBreedingSelectionBtn')?.addEventListener('click',()=>setBreedingSelection(n));
@@ -1757,7 +1766,7 @@ const DEFAULT_ROLES=['Retired','Reserve','Experimental'];
 let boardSort={key:'usefulScore',dir:-1};
 let boardEdits=null;
 
-function boardKey(n){return String(n.icarus_uid??n.id)}
+function boardKey(n){return String(n.bt_id??n.id)}
 function normalizeBoardEdits(edits){
   edits=edits&&typeof edits==='object'&&!Array.isArray(edits)?edits:{};
   for(const e of Object.values(edits)){
@@ -1802,7 +1811,7 @@ function roleOptionsHtml(selected=''){
   return `<option value="">No role</option>`+allRoles().map(role=>`<option value="${esc(role)}" ${role===selected?'selected':''}>${esc(role)}</option>`).join('');
 }
 function petNameWithUid(n){
-  return n?`${displayName(n)} (${n.icarus_uid??'—'})`:'—';
+  return n?`${displayName(n)} (${n.bt_id??'—'})`:'—';
 }
 function parentDisplay(n){
   const m=n.mother?(byId.has(n.mother)?petNameWithUid(byId.get(n.mother)):n.mother):'—';
@@ -1844,7 +1853,7 @@ function renderBreedingTable(){
     const statCells=(n.stats||Array(7).fill(null)).map((v,i)=>`<td class="statcell ${statClass(i,v)}">${v??'—'}</td>`).join('');
     tr.classList.toggle('selected-row',selected===n.id);
     tr.innerHTML=`
-      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.icarus_uid??'—')})</span></button></td>
+      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.bt_id??'—')})</span></button></td>
       <td><input data-field="nickname" data-key="${esc(boardKey(n))}" value="${esc(n.nickname||'')}" placeholder="—"></td>
       <td>${n.sex==='F'?'♀ F':n.sex==='M'?'♂ M':'?'}</td>
       <td>${esc(n.bloodline||'—')}</td>
@@ -1925,13 +1934,13 @@ function promptAddRole(){
   render(); refreshSelectedDetail();
 }
 
-const LOCAL_POLL_MS=60000;
+const LOCAL_POLL_MS=5000;
 const EXPECTED_GENETICS=['V','F','P','R','T','A','I'];
 let lastJsonText=null;
 let refreshInFlight=false;
 let currentPayload=null;
 let userDataDirty=false;
-let breedingPanel={female_uid:null,male_uid:null};
+let breedingPanel={female_bt_id:null,male_bt_id:null};
 let breedingPanelDirty=false;
 const importBadge=document.getElementById('importBadge');
 const saveChoicesBtn=document.getElementById('saveChoicesBtn');
@@ -1959,7 +1968,7 @@ function syncGraphUserData(){
   const root=currentPayload.user_data&&typeof currentPayload.user_data==='object'&&!Array.isArray(currentPayload.user_data)
     ? currentPayload.user_data:{};
   const existing=root.graph&&typeof root.graph==='object'&&!Array.isArray(root.graph)?root.graph:{};
-  root.graph={...existing,schema_version:2,preferences:JSON.parse(JSON.stringify(preferences)),annotations:encodedAnnotations()};
+  root.graph={...existing,schema_version:2,preferences:{...existing.preferences,...JSON.parse(JSON.stringify(preferences)),navigation:{...existing.preferences?.navigation,...JSON.parse(JSON.stringify(preferences.navigation))}},annotations:encodedAnnotations()};
   currentPayload.user_data=root;
 }
 
@@ -1983,33 +1992,30 @@ function hydrateGraphUserData(payload){
   applyBlockOrder();
 }
 
-function persistentIcarusUid(value){
-  const uid=numericUid(value);
-  return uid!==null&&Number.isInteger(uid)&&uid>=0?uid:null;
-}
+function stablePetId(value){return typeof value==='string'&&/^W-\d+:P-\d+$/.test(value)?value:null}
 
 function hydrateBreedingPanel(payload){
   const panel=payload?.breeding_panel;
   breedingPanel={
-    female_uid:persistentIcarusUid(panel?.female_uid),
-    male_uid:persistentIcarusUid(panel?.male_uid)
+    female_bt_id:stablePetId(panel?.female_bt_id),
+    male_bt_id:stablePetId(panel?.male_bt_id)
   };
 }
 
 function selectedPetName(uid){
   if(uid===null)return 'Not selected';
-  const pet=currentPayload?.pets?.find(item=>persistentIcarusUid(item.icarus_uid)===uid);
+  const pet=currentPayload?.pets?.find(item=>stablePetId(item.bt_id)===uid);
   return pet&&canonicalName(pet.name)?canonicalName(pet.name):'[MISSING]';
 }
 
 function petByPersistentUid(uid){
   if(uid===null)return null;
-  return DATA.nodes.find(pet=>persistentIcarusUid(pet.icarus_uid)===uid)||null;
+  return DATA.nodes.find(pet=>stablePetId(pet.bt_id)===uid)||null;
 }
 
 function breedingPairStatus(panel=breedingPanel){
-  const female=petByPersistentUid(panel.female_uid),male=petByPersistentUid(panel.male_uid);
-  const complete=panel.female_uid!==null&&panel.male_uid!==null;
+  const female=petByPersistentUid(panel.female_bt_id),male=petByPersistentUid(panel.male_bt_id);
+  const complete=panel.female_bt_id!==null&&panel.male_bt_id!==null;
   const resolved=!complete||Boolean(female&&male);
   const sameSpecies=!complete||!female||!male||nodeSpeciesKey(female)===nodeSpeciesKey(male);
   const reason=complete&&!resolved?'One selected pet is no longer available.':complete&&!sameSpecies?'Female and male must belong to the same species.':'';
@@ -2017,18 +2023,19 @@ function breedingPairStatus(panel=breedingPanel){
 }
 
 function breederAssignmentBlockReason(n){
-  const uid=persistentIcarusUid(n.icarus_uid);
+  if(n.stage!=='adult')return 'Only confirmed adults can be assigned';
+  const uid=stablePetId(n.bt_id);
   if(uid===null)return 'A persistent non-negative Icarus UID is required';
   if(n.historical||n.isPresent===false)return '/!\\ this animal is missing';
   if(n.sex!=='F'&&n.sex!=='M')return 'A known female or male sex is required';
-  const otherUid=breedingPanel[n.sex==='F'?'male_uid':'female_uid'];
+  const otherUid=breedingPanel[n.sex==='F'?'male_bt_id':'female_bt_id'];
   const other=petByPersistentUid(otherUid);
   if(other&&nodeSpeciesKey(other)!==nodeSpeciesKey(n))return `Current ${n.sex==='F'?'male':'female'} belongs to ${speciesLabel(nodeSpeciesKey(other))}`;
   return '';
 }
 
 function renderBreedingPairPanel(){
-  const femaleUid=breedingPanel.female_uid,maleUid=breedingPanel.male_uid;
+  const femaleUid=breedingPanel.female_bt_id,maleUid=breedingPanel.male_bt_id;
   nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
   nextMaleName.textContent=maleUid===null?'Not selected':selectedPetName(maleUid);
   breedingPairState.textContent=breedingPanelDirty?'Pending — not sent':'';
@@ -2040,7 +2047,7 @@ function renderBreedingPairPanel(){
 
 function breedingSelectionButtonHtml(n){
   if(n.sex!=='F'&&n.sex!=='M')return '';
-  const uid=persistentIcarusUid(n.icarus_uid);
+  const uid=stablePetId(n.bt_id);
   const side=n.sex==='F'?'female':'male';
   const selected=uid!==null&&breedingPanel[`${side}_uid`]===uid;
   const disabledReason=breederAssignmentBlockReason(n);
@@ -2051,7 +2058,7 @@ function breedingSelectionButtonHtml(n){
 }
 
 function setBreedingSelection(n){
-  const uid=persistentIcarusUid(n.icarus_uid);
+  const uid=stablePetId(n.bt_id);
   if(breederAssignmentBlockReason(n))return;
   let activated=false;
   if(!n.breedingActive){
@@ -2065,7 +2072,7 @@ function setBreedingSelection(n){
     markUserDataDirty();
     activated=true;
   }
-  breedingPanel[n.sex==='F'?'female_uid':'male_uid']=uid;
+  breedingPanel[n.sex==='F'?'female_bt_id':'male_bt_id']=uid;
   breedingPanelDirty=true;
   renderBreedingPairPanel();
   if(activated){updateCategoryNavigation();render()}
@@ -2096,20 +2103,45 @@ function canonicalName(value){
   return String(value||'').trim();
 }
 
-function numericUid(value){
-  if(value===null || value===undefined || value==='')return null;
-  const uid=Number(value);
-  return Number.isFinite(uid)?uid:null;
-}
+function numericUid(value){return stablePetId(value)}
 
-function petId(uid){return `uid:${uid}`}
+function petId(uid){return uid}
 
 function nameKey(species,name){
   return `${species}\u0000${canonicalName(name).toLocaleLowerCase()}`;
 }
 
-function applyCensus(payload){
-  validateCensus(payload);
+function applyCensus(document){
+  validateCensus(document);
+  const nextWorld=BTView.pinnedWorld&&document.worlds[BTView.pinnedWorld]?BTView.pinnedWorld:document.active_world;
+  const entering=BTView.world!==nextWorld;
+  if(entering){
+    stashWorldDraft();
+    userDataDirty=false; breedingPanelDirty=false;
+    selected=null; currentSpecies=''; activeView={kind:'species',key:null};
+    Object.assign(advisorState,{chosenPairKey:null,selectedFemaleUid:null,selectedMaleUid:null});
+    BTView.world=nextWorld;
+  }
+  BTView.document=document;
+  let payload=BTData.project(document,nextWorld);
+  if(entering){
+    const navigation=payload.user_data.graph.navigation;
+    if(navigation){currentSpecies=navigation.species||'';activeView=navigation.view||{kind:'species',key:null};selected=navigation.selected||null}
+    Object.assign(advisorState,payload.user_data.graph.advisor||{});
+  }
+  selected=BTData.resolve(document.worlds[nextWorld],selected);
+  const draft=BTView.drafts.get(nextWorld);
+  if(draft&&!userDataDirty&&!breedingPanelDirty){
+    hydrateGraphUserData(draft.payload); hydrateBreedingPanel(draft.payload);
+    userDataDirty=draft.dirty; breedingPanelDirty=draft.pairDirty;
+    selected=draft.selected; currentSpecies=draft.species; activeView=draft.view;
+    Object.assign(advisorState,draft.advisor);
+    BTView.base=draft.base; BTView.pairBase=draft.pairBase;
+    BTView.drafts.delete(nextWorld);
+  }
+  if(!userDataDirty)BTView.base=BTData.copy(document.user_data.worlds[nextWorld]?.graph||{});
+  if(!breedingPanelDirty)BTView.pairBase=BTData.copy(document.user_data.worlds[nextWorld]?.current_pair||{});
+  updateWorldControls();
   connectEmpty.hidden=true;
 
   if(!userDataDirty)hydrateGraphUserData(payload);
@@ -2117,13 +2149,7 @@ function applyCensus(payload){
   currentPayload=payload;
   if(userDataDirty)syncGraphUserData();
 
-  const validPets=payload.pets.filter(p=>{
-    const uid=numericUid(p.icarus_uid);
-    const historical=uid===null||uid<0||p.historical===true;
-    return Array.isArray(p.genetics) && p.genetics.length===7 &&
-      p.genetics.every(value=>historical?(value===null||Number.isFinite(Number(value))):Number.isFinite(Number(value))) &&
-      (p.species_key||p.actor_class);
-  });
+  const validPets=payload.pets.filter(p=>stablePetId(p.bt_id));
   const nodes=[];
   const importedByUid=new Map();
   const importedByPet=new Map();
@@ -2131,14 +2157,14 @@ function applyCensus(payload){
 
   // PASS 1: rebuild one stable node per UID. No save-specific data is embedded.
   for(const [sourceIndex,p] of validPets.entries()){
-    const uid=numericUid(p.icarus_uid);
+    const uid=numericUid(p.bt_id);
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const stats=p.genetics.map(value=>value===null?null:Number(value));
-    const historical=uid===null||uid<0;
-    const isPresent=typeof p.present==='boolean'?p.present:true;
+    const historical=p.historical===true;
+    const isPresent=typeof p.present==='boolean'?p.present:null;
     const n={
-      id:uid===null?`synthetic:${sourceIndex}`:petId(uid),
-      icarus_uid:uid,
+      id:petId(uid),
+      bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,
       name:canonicalName(p.name)||(uid===null?'Historical pet':`Pet ${uid}`),
       previousNames:Array.isArray(p.previous_names)?p.previous_names.map(canonicalName).filter(Boolean):[],
       actor_class:p.actor_class||'',
@@ -2183,8 +2209,8 @@ function applyCensus(payload){
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const n=importedByPet.get(p);
     if(!n)continue;
-    const motherUid=numericUid(p.mother_uid);
-    const fatherUid=numericUid(p.father_uid);
+    const motherUid=numericUid(p.mother_bt_id);
+    const fatherUid=numericUid(p.father_bt_id);
     const mom=motherUid!==null
       ? importedByUid.get(motherUid)
       : uniqueNamedParent(species,p.mother,'F');
@@ -2277,99 +2303,86 @@ async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   return (await entry.getFile()).text();
 }
 
-function serializeCensus(payload){
-  const entries=Object.entries(payload).map(([key,value])=>{
-    if(key==='pets'&&Array.isArray(value)){
-      const rows=value.map(p=>`    ${JSON.stringify(p)}`);
-      return `  "pets":[\n${rows.map((row,index)=>row+(index<rows.length-1?',':'')).join('\n')}\n  ]`;
-    }
-    return `  ${JSON.stringify(key)}:${JSON.stringify(value)}`;
-  });
-  return `{\n${entries.map((entry,index)=>entry+(index<entries.length-1?',':'')).join('\n')}\n}\n`;
+const BTView={document:null,world:null,pinnedWorld:null,base:null,pairBase:null,drafts:new Map(),saving:false};
+const detailDrafts=new Map();
+function validateCensus(payload){BTData.validate(payload)}
+function stashWorldDraft(){
+  if(!currentPayload||!BTView.world)return;
+  if(userDataDirty)syncGraphUserData();
+  const payload=BTData.copy(currentPayload);payload.breeding_panel=BTData.copy(breedingPanel);
+  BTView.drafts.set(BTView.world,{payload,base:BTData.copy(BTView.base),pairBase:BTData.copy(BTView.pairBase),
+    dirty:userDataDirty,pairDirty:breedingPanelDirty,selected,species:currentSpecies,view:BTData.copy(activeView),advisor:BTData.copy(advisorState)});
 }
-
-async function writableJsonEntry(){
-  if(!('showDirectoryPicker' in window))throw new Error('Sending requires folder access in a Chromium browser');
-  const handle=localDirectoryHandle;
-  if(!handle)throw new Error('Click Connect / Refresh first, then try again');
-  let permission=await handle.queryPermission({mode:'readwrite'});
-  if(permission!=='granted')permission=await handle.requestPermission({mode:'readwrite'});
-  if(permission!=='granted')throw new Error('File modification permission was not granted');
-  return handle.getFileHandle(LOCAL_JSON_NAME);
+function updateWorldControls(){
+  const d=BTView.document,select=document.getElementById('worldSelect');
+  const chosen=BTView.pinnedWorld||'';
+  select.replaceChildren(new Option('Active world',''));
+  for(const [key,w] of Object.entries(d.worlds))select.add(new Option(w.metadata.prospect_id||key,key));
+  select.value=chosen;
+  const w=d.worlds[BTView.world];
+  document.getElementById('worldState').textContent=w?`${w.metadata.prospect_id} · ${w.metadata.world_type}`:'Waiting for a world';
+  if(d.migration?.unassigned_legacy)document.getElementById('worldState').textContent+=' · Legacy history preserved, not yet assigned';
 }
-
-function validateCensus(payload){
-  if(payload?.schema!=='BTPetCensus'||Number(payload.schema_version)!==1||!Array.isArray(payload.pets)
-    ||JSON.stringify(payload.genetics_order)!==JSON.stringify(EXPECTED_GENETICS)){
-    throw new Error('BreedingTool.json is not valid BTPetCensus data');
-  }
-}
-
-async function updateCensusEntry(entry, update){
-  const payload=JSON.parse(await (await entry.getFile()).text());
-  validateCensus(payload);
-  update(payload);
-  const text=serializeCensus(payload);
-  const writable=await entry.createWritable();
-  await writable.write(text);
-  await writable.close();
-  return {payload,text};
-}
-
+document.getElementById('worldSelect').addEventListener('change',event=>{
+  BTView.pinnedWorld=event.target.value||null;
+  if(BTView.document)applyCensus(BTView.document);
+});
+document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
+  if(BTView.saving)return;
+  if((userDataDirty||breedingPanelDirty)&&!confirm('Discard unsaved choices for this world and reload the saved version?'))return;
+  BTView.drafts.delete(BTView.world);userDataDirty=false;breedingPanelDirty=false;
+  for(const id of detailDrafts.keys())if(id.startsWith(BTView.world+':'))detailDrafts.delete(id);
+  if(BTView.document)applyCensus(BTView.document);
+  refreshJson(true);
+});
 async function sendBreedingPanel(){
-  const status=breedingPairStatus();
-  if(!status.valid)throw new Error(status.reason||'Select one female and one male first.');
-  const entry=await writableJsonEntry();
-  const {payload,text}=await updateCensusEntry(entry,latest=>{
-    latest.breeding_panel={female_uid:breedingPanel.female_uid,male_uid:breedingPanel.male_uid};
-  });
-  breedingPanelDirty=false;
-  currentPayload=payload;
-  lastJsonText=text;
-  applyCensus(payload);
-  breedingPairState.textContent='Sent to BreedingTool.json';
-}
-
-function downloadJson(text){
-  const link=document.createElement('a');
-  link.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));
-  link.download=LOCAL_JSON_NAME;
-  link.click();
-  setTimeout(()=>URL.revokeObjectURL(link.href),0);
-}
-
-async function saveChoices(){
-  if(!currentPayload)throw new Error('No JSON loaded yet');
-  syncGraphUserData();
-  const graphUserData=currentPayload.user_data;
-  let handle=await loadSavedDirectory().catch(()=>null);
-  let outputPayload=currentPayload;
-  let text='';
-
-  if('showDirectoryPicker' in window){
-    let permission=handle?await handle.queryPermission({mode:'readwrite'}):'prompt';
-    if(handle&&permission!=='granted')permission=await handle.requestPermission({mode:'readwrite'});
-    if(!handle||permission!=='granted'){
-      handle=await window.showDirectoryPicker({id:DIRECTORY_PICKER_ID,mode:'readwrite'});
-      await rememberDirectory(handle);
+  if(BTView.saving)throw new Error('A save is already pending');
+  if(!breedingPairStatus().valid)throw new Error(breedingPairStatus().reason);
+  const world=BTView.world,submitted=BTData.copy(breedingPanel);
+  const ops=BTData.diff(BTView.pairBase,submitted,['worlds',world,'current_pair']);
+  BTView.saving=true;
+  try{
+    const latest=await BTData.submit(localDirectoryHandle,world,ops,message=>breedingPairState.textContent=message);
+    if(world===BTView.world){
+      breedingPanelDirty=!BTData.same(breedingPanel,submitted);
+      BTView.pairBase=submitted;
+    }else{
+      const draft=BTView.drafts.get(world);
+      if(draft){draft.pairDirty=!BTData.same(draft.payload.breeding_panel,submitted);draft.pairBase=submitted}
     }
-    const entry=await handle.getFileHandle(LOCAL_JSON_NAME);
-    const updated=await updateCensusEntry(entry,latest=>{latest.user_data=graphUserData});
-    outputPayload=updated.payload;
-    text=updated.text;
-    importBadge.textContent='Choices saved locally to BreedingTool.json';
-  }else{
-    text=serializeCensus(outputPayload);
-    downloadJson(text);
-    importBadge.textContent='Choices exported: replace BreedingTool.json with the download';
-  }
-
-  currentPayload=outputPayload;
-  lastJsonText=text;
-  userDataDirty=false;
-  saveChoicesBtn.textContent='Save choices';
-  saveChoicesBtn.classList.remove('active');
-  applyCensus(currentPayload);
+    if(latest)applyCensus(latest);
+    breedingPairState.textContent='Pair saved';
+  }finally{BTView.saving=false}
+}
+async function saveChoices(){
+  if(BTView.saving)throw new Error('A save is already pending');
+  if(!currentPayload||!BTView.world)throw new Error('Wait for a world first');
+  syncGraphUserData();
+  const world=BTView.world,submitted=BTData.copy(currentPayload.user_data.graph);
+  submitted.navigation={species:currentSpecies,view:BTData.copy(activeView),selected};
+  submitted.advisor=BTData.copy(advisorState);
+  const ops=BTData.diff(BTView.base,submitted,['worlds',world,'graph']);
+  BTView.saving=true;saveChoicesBtn.disabled=true;
+  try{
+    const latest=await BTData.submit(localDirectoryHandle,world,ops,message=>importBadge.textContent=message);
+    if(world===BTView.world){
+      syncGraphUserData();
+      const now=BTData.copy(currentPayload.user_data.graph);
+      now.navigation=submitted.navigation;now.advisor=submitted.advisor;
+      userDataDirty=!BTData.same(now,submitted);
+      BTView.base=submitted;
+    }else{
+      const draft=BTView.drafts.get(world);
+      if(draft){
+        const now=BTData.copy(draft.payload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;
+        draft.dirty=!BTData.same(now,submitted);draft.base=submitted;
+      }
+    }
+    if(latest)applyCensus(latest);
+    saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';
+    saveChoicesBtn.classList.toggle('active',userDataDirty);
+    importBadge.textContent='Choices saved';
+  }finally{BTView.saving=false;saveChoicesBtn.disabled=false}
 }
 
 async function pickJsonFile(){
@@ -2387,7 +2400,7 @@ async function applyJsonText(text,source,force){
     const payload=JSON.parse(text);
     applyCensus(payload);
     lastJsonText=text;
-    const count=Array.isArray(payload.pets)?payload.pets.length:0;
+    const count=Object.keys(payload.worlds?.[BTView.world]?.pets||{}).length;
     importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
   }else{
     importBadge.textContent=`JSON ${source}: up to date · ${now}`;
@@ -2548,7 +2561,7 @@ window.addEventListener('blur',hideTooltip);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hideTooltip()});
 document.getElementById('clearBtn').addEventListener('click',()=>{selected=null;selectedPetSummary.textContent='No pet selected';detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div>';render()});
 document.getElementById('clearBreedingPairBtn').addEventListener('click',()=>{
-  breedingPanel={female_uid:null,male_uid:null};
+  breedingPanel={female_bt_id:null,male_bt_id:null};
   breedingPanelDirty=true;
   renderBreedingPairPanel();
   refreshSelectedDetail();
