@@ -1,4 +1,4 @@
-/* V2: the browser never writes BreedingTool.json. Only immutable commands. */
+/* Lua alone writes BreedingTool.json. Browser saves use one occupied mailbox. */
 globalThis.BTData=(()=>{
   const copy=value=>JSON.parse(JSON.stringify(value));
   const isObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -56,27 +56,36 @@ globalThis.BTData=(()=>{
     if(!ops.length)return null;
     const permission=await directory.requestPermission({mode:'readwrite'});
     if(permission!=='granted')throw new Error('Folder permission required');
-    const id=crypto.randomUUID(),base=`BT-${id}`;
-    const command={id,kind:'user_patch',world,ops};
+    if(!navigator.locks)throw new Error('This browser cannot coordinate saves. Use Chrome or Edge.');
+    return navigator.locks.request('breedingtool-mailbox',async()=>{
+    const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle('BreedingTool.json')).getFile()).text()));
+    if((await latestDocument()).transport?.protocol!==2)throw new Error('Breeding Tool Lua 2.1 required for saving.');
+    const mailbox='BreedingTool.command.json';
+    const occupied=async()=>{
+      try{await directory.getFileHandle(mailbox);return true}
+      catch(e){if(e.name==='NotFoundError')return false;throw e}
+    };
+    if(await occupied())throw new Error('A save is still pending. Wait for Lua and refresh before saving again.');
+    const id=crypto.randomUUID();
+    const command={command_id:id,action:'user_patch',payload:{world,ops}};
     const write=async(name,text)=>{
       const entry=await directory.getFileHandle(name,{create:true});
       const stream=await entry.createWritable();
       try{await stream.write(text);await stream.close()}catch(e){await stream.abort().catch(()=>{});throw e}
     };
-    await write(`${base}.btcmd`,`BT2\n${JSON.stringify(command)}\nEND\n`);
-    // A request becomes visible to Lua only after the complete payload is closed.
-    await write(`${base}.ready`,'BT2\n');
+    await write(mailbox,JSON.stringify(command));
     onWaiting('Waiting for Lua confirmation…');
     for(let attempt=0;attempt<30;attempt++){
       await new Promise(resolve=>setTimeout(resolve,500));
       let latest;
-      try{latest=validate(JSON.parse(await(await(await directory.getFileHandle('BreedingTool.json')).getFile()).text()))}catch{continue}
-      const receipt=latest.transport?.receipts?.[id];
-      if(!receipt)continue;
+      try{latest=await latestDocument()}catch{continue}
+      const receipt=latest.transport?.last_command;
+      if(receipt?.command_id!==id||await occupied())continue;
       if(receipt.status!=='applied')throw new Error('Concurrent edit: choices retained. Reload the saved choices before retrying.');
       return latest;
     }
     throw new Error('Request queued; no Lua confirmation yet. Refresh to check the saved choices.');
+    });
   }
   return {copy,same,validate,project,resolve,diff,submit};
 })();

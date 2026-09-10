@@ -515,7 +515,7 @@ function getVisibleNodes(){
 function nodeMatchesSearch(n,query=search.value.trim().toLowerCase()){
   if(!query)return true;
   return [
-    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.bt_id??''),String(n.level??''),String(n.experience??'')
+    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.runtime_uid??''),String(n.level??''),String(n.experience??'')
   ].join(' ').toLowerCase().includes(query);
 }
 
@@ -1014,7 +1014,7 @@ function activeViewDescription(){
   }
   if(activeView.kind==='foundation'){
     const descriptor=navigationCatalog.foundationsBySpecies.get(currentSpecies)?.get(String(activeView.key));
-    return `Known descendants of ${displayName(byId.get(descriptor?.founderId))}, identified by founder UID ${activeView.key}.`;
+    return `Known descendants of ${displayName(byId.get(descriptor?.founderId))}, identified by Icarus UID ${byId.get(descriptor?.founderId)?.runtime_uid??'—'}.`;
   }
   return `All known parentage for ${speciesLabel(currentSpecies)}.`;
 }
@@ -1215,14 +1215,14 @@ function advisorStatHtml(n){
 function advisorGroupNamesHtml(group,sex){
   const pets=group?.pets?.length?group.pets:[group?.representative].filter(Boolean);
   if(pets.length<=1)return `<h3>${esc(displayName(pets[0]))}</h3>`;
-  return `<div class="advisor-twin-labels">${pets.map(pet=>`<span class="advisor-twin-label ${sex}" title="UID ${esc(pet.bt_id)}">${esc(displayName(pet))} (${esc(pet.bt_id)})</span>`).join('')}</div><div class="advisor-twin-note">Grouped genetically equivalent siblings · one selected individual is sent to the panel</div>`;
+  return `<div class="advisor-twin-labels">${pets.map(pet=>`<span class="advisor-twin-label ${sex}" title="UID ${esc(pet.runtime_uid??'—')}">${esc(displayName(pet))} (${esc(pet.runtime_uid??'—')})</span>`).join('')}</div><div class="advisor-twin-note">Grouped genetically equivalent siblings · one selected individual is sent to the panel</div>`;
 }
 
 function advisorParentHtml(n,sex,group=null){
   const equivalents=Math.max(0,(group?.pets?.length||1)-1);
   return `<div class="advisor-parent ${sex}" data-select-pet="${esc(n.id)}" role="button" tabindex="0">
     <div class="advisor-parent-head">
-      <div><h3>${esc(displayName(n))} (${esc(n.bt_id)})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'}</div></div>
+      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'}</div></div>
       <span class="sex" style="color:var(--${sex==='female'?'female':'male'})">${sex==='female'?'♀':'♂'}</span>
     </div>
     <div class="stats">${advisorStatHtml(n)}</div>
@@ -1437,11 +1437,11 @@ function renderAdvisor(){
     const partnerGroup=sex==='female'?pair.maleGroup:pair.femaleGroup;
     const selectedUid=sex==='female'?stablePetId(chosen.female.bt_id):stablePetId(chosen.male.bt_id);
     const partnerNames=(partnerGroup?.pets||[sex==='female'?pair.male:pair.female])
-      .map(member=>`${displayName(member)} (${member.bt_id})`).join(' / ');
+      .map(member=>`${displayName(member)} (${member.runtime_uid??'—'})`).join(' / ');
     const members=group?.pets?.length?group.pets:[sex==='female'?pair.female:pair.male];
     const buttons=members.map(member=>{
       const uid=stablePetId(member.bt_id);
-      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(uid)})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
+      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
     }).join('');
     return `<div class="advisor-alt-row ${members.length>1?'twins':''}">${buttons}</div>`;
   };
@@ -1482,7 +1482,7 @@ function renderAdvisor(){
     if(!next||uid===null)return;
     advisorState.chosenPairKey=next.key;
     advisorState[side==='female'?'selectedFemaleUid':'selectedMaleUid']=uid;
-    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>stablePetId(item.bt_id)===uid);
+    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>item.stage==='adult'&&stablePetId(item.bt_id)===uid);
     if(pet)selected=pet.id;
     renderAdvisor();
     refreshSelectedDetail();
@@ -1628,7 +1628,7 @@ function renderSelectedDetail(id){
   detail.dataset.petId=id;
   const n=byId.get(id); if(!n)return;
   const ownedFoundation=foundationForPet(n);
-  selectedPetSummary.textContent=`${displayName(n)} (${n.bt_id??'—'}) · ${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'}`;
+  selectedPetSummary.textContent=`${displayName(n)} (${n.runtime_uid??'—'}) · ${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'}`;
   const inactiveLock=n.breedingInactiveReason||automaticInactiveReason(n);
   const statHtml=(n.stats||[]).map((v,i)=>`<div class="stat ${statClass(i,v,nodeSpeciesKey(n))}"><label>${STAT_LABELS[i]}</label><b>${v??'—'}</b></div>`).join('');
   const kids=offspringOf(id);
@@ -1639,7 +1639,7 @@ function renderSelectedDetail(id){
   detail.innerHTML=`
     <div class="detail-card">
       <div class="detail-identity">
-        <h2><span>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</span><span class="detail-uid">(${esc(n.bt_id??'—')})</span></h2><div class="small">Runtime UID: ${esc(n.runtime_uid??'—')} · ${esc(n.stage||'unknown')} · UID history: ${esc((n.uid_history||[]).map(h=>h.uid).join(' → '))}</div>
+        <h2><span>${esc(n.name)}${n.nickname?` <span class="small">(${esc(n.nickname)})</span>`:''}</span><span class="detail-uid">(${esc(n.runtime_uid??'—')})</span></h2>
         <div class="small">${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'} · ${esc(n.bloodline)} · ${presenceLabel(n)} · Breeding: ${activityLabel(n)}${n.role?` · Role: ${esc(n.role)}`:''}</div>
       </div>
       <div class="stats">${statHtml}</div>
@@ -1811,7 +1811,7 @@ function roleOptionsHtml(selected=''){
   return `<option value="">No role</option>`+allRoles().map(role=>`<option value="${esc(role)}" ${role===selected?'selected':''}>${esc(role)}</option>`).join('');
 }
 function petNameWithUid(n){
-  return n?`${displayName(n)} (${n.bt_id??'—'})`:'—';
+  return n?`${displayName(n)} (${n.runtime_uid??'—'})`:'—';
 }
 function parentDisplay(n){
   const m=n.mother?(byId.has(n.mother)?petNameWithUid(byId.get(n.mother)):n.mother):'—';
@@ -1853,7 +1853,7 @@ function renderBreedingTable(){
     const statCells=(n.stats||Array(7).fill(null)).map((v,i)=>`<td class="statcell ${statClass(i,v)}">${v??'—'}</td>`).join('');
     tr.classList.toggle('selected-row',selected===n.id);
     tr.innerHTML=`
-      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.bt_id??'—')})</span></button></td>
+      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.runtime_uid??'—')})</span></button></td>
       <td><input data-field="nickname" data-key="${esc(boardKey(n))}" value="${esc(n.nickname||'')}" placeholder="—"></td>
       <td>${n.sex==='F'?'♀ F':n.sex==='M'?'♂ M':'?'}</td>
       <td>${esc(n.bloodline||'—')}</td>
@@ -2004,7 +2004,7 @@ function hydrateBreedingPanel(payload){
 
 function selectedPetName(uid){
   if(uid===null)return 'Not selected';
-  const pet=currentPayload?.pets?.find(item=>stablePetId(item.bt_id)===uid);
+  const pet=currentPayload?.pets?.find(item=>item.stage==='adult'&&stablePetId(item.bt_id)===uid);
   return pet&&canonicalName(pet.name)?canonicalName(pet.name):'[MISSING]';
 }
 
@@ -2100,7 +2100,7 @@ function displayName(n){
 }
 
 function canonicalName(value){
-  return String(value||'').trim();
+  return String(value||'').replace(/W-?\d+:P-?\d+/g,'').replace(/^Pet\s*$/,'Unnamed').trim();
 }
 
 function numericUid(value){return stablePetId(value)}
@@ -2149,7 +2149,7 @@ function applyCensus(document){
   currentPayload=payload;
   if(userDataDirty)syncGraphUserData();
 
-  const validPets=payload.pets.filter(p=>stablePetId(p.bt_id));
+  const validPets=payload.pets.filter(p=>p.stage==='adult'&&stablePetId(p.bt_id));
   const nodes=[];
   const importedByUid=new Map();
   const importedByPet=new Map();
@@ -2165,7 +2165,7 @@ function applyCensus(document){
     const n={
       id:petId(uid),
       bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,
-      name:canonicalName(p.name)||(uid===null?'Historical pet':`Pet ${uid}`),
+      name:canonicalName(p.name)||'Unnamed',
       previousNames:Array.isArray(p.previous_names)?p.previous_names.map(canonicalName).filter(Boolean):[],
       actor_class:p.actor_class||'',
       species_key:species,
@@ -2320,8 +2320,7 @@ function updateWorldControls(){
   for(const [key,w] of Object.entries(d.worlds))select.add(new Option(w.metadata.prospect_id||key,key));
   select.value=chosen;
   const w=d.worlds[BTView.world];
-  document.getElementById('worldState').textContent=w?`${w.metadata.prospect_id} · ${w.metadata.world_type}`:'Waiting for a world';
-  if(d.migration?.unassigned_legacy)document.getElementById('worldState').textContent+=' · Legacy history preserved, not yet assigned';
+  document.getElementById('worldState').textContent=w?`${w.metadata.prospect_id}`:'Waiting for a world';
 }
 document.getElementById('worldSelect').addEventListener('change',event=>{
   BTView.pinnedWorld=event.target.value||null;
@@ -2400,7 +2399,7 @@ async function applyJsonText(text,source,force){
     const payload=JSON.parse(text);
     applyCensus(payload);
     lastJsonText=text;
-    const count=Object.keys(payload.worlds?.[BTView.world]?.pets||{}).length;
+    const count=Object.values(payload.worlds?.[BTView.world]?.pets||{}).filter(p=>p.stage==='adult').length;
     importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
   }else{
     importBadge.textContent=`JSON ${source}: up to date · ${now}`;
