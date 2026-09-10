@@ -528,7 +528,19 @@ function layoutUid(n){
   return first!==undefined&&Number.isFinite(Number(first))?Number(first):Number.POSITIVE_INFINITY;
 }
 
+function layoutBtOrder(n){
+  const match=/^W-(\d+):P-(\d+)$/.exec(String(n?.bt_id||n?.id||''));
+  return match?[Number(match[1]),Number(match[2])]:[Number.POSITIVE_INFINITY,Number.POSITIVE_INFINITY];
+}
+
 function stableLayoutCompare(a,b){
+  const fa=firstSeenSortValue(a),fb=firstSeenSortValue(b);
+  if(fa!==fb)return fa<fb?-1:1;
+
+  const [wa,pa]=layoutBtOrder(a),[wb,pb]=layoutBtOrder(b);
+  if(wa!==wb)return wa<wb?-1:1;
+  if(pa!==pb)return pa<pb?-1:1;
+
   const ua=layoutUid(a),ub=layoutUid(b);
   if(ua!==ub)return ua<ub?-1:1;
   return String(a?.id||'').localeCompare(String(b?.id||''),'en',{numeric:true});
@@ -2197,14 +2209,34 @@ function applyCensus(document){
   DATA.nodes=nodes;
   rebuildIndex();
 
-  function uniqueNamedParent(species,label,expectedSex){
+  function firstSeenTimestamp(node){
+    const value=node?.firstSeen;
+    if(value===null||value===undefined||value==='')return null;
+    const numeric=Number(value);
+    if(Number.isFinite(numeric))return numeric;
+    if(typeof value==='string'){
+      const parsed=Date.parse(value);
+      if(Number.isFinite(parsed))return parsed;
+    }
+    return null;
+  }
+
+  function uniqueNamedParent(species,label,expectedSex,child){
     if(!canonicalName(label))return null;
+    const childSeen=firstSeenTimestamp(child);
     const candidates=(importedBySpeciesName.get(nameKey(species,label))||[])
-      .filter(n=>n.sex===expectedSex);
+      .filter(candidate=>candidate.sex===expectedSex && candidate.id!==child?.id)
+      .filter(candidate=>{
+        const candidateSeen=firstSeenTimestamp(candidate);
+        // Initial-census animals may legitimately share exactly the same first_seen.
+        // Reject only candidates proven to have appeared after the child.
+        return childSeen===null || candidateSeen===null || candidateSeen<=childSeen;
+      });
     return candidates.length===1?candidates[0]:null;
   }
 
-  // PASS 2: parent UID is authoritative; names are a unique legacy fallback.
+  // PASS 2: parent BT_ID is authoritative. Names are only a legacy fallback,
+  // protected against impossible future-parent matches by first_seen.
   for(const p of validPets){
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const n=importedByPet.get(p);
@@ -2213,10 +2245,10 @@ function applyCensus(document){
     const fatherUid=numericUid(p.father_bt_id);
     const mom=motherUid!==null
       ? importedByUid.get(motherUid)
-      : uniqueNamedParent(species,p.mother,'F');
+      : uniqueNamedParent(species,p.mother,'F',n);
     const dad=fatherUid!==null
       ? importedByUid.get(fatherUid)
-      : uniqueNamedParent(species,p.father,'M');
+      : uniqueNamedParent(species,p.father,'M',n);
     n.mother=mom?.id||null;
     n.father=dad?.id||null;
   }
