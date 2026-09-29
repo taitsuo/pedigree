@@ -1,4 +1,4 @@
-/* Lua alone writes BreedingTool.json. Browser saves use one occupied mailbox. */
+/* Lua alone writes BreedingTool.json. Browser saves replace one passive mailbox snapshot. */
 globalThis.BTData=(()=>{
   const copy=value=>JSON.parse(JSON.stringify(value));
   const isObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -51,41 +51,80 @@ globalThis.BTData=(()=>{
     }
     return ops;
   }
-  async function submit(directory,world,ops,onWaiting=()=>{}){
+  const forbidden=new Set(['__proto__','constructor','prototype']);
+  const safePath=path=>Array.isArray(path)&&path.length>0&&path.every(key=>typeof key==='string'&&!forbidden.has(key));
+  function setPath(root,path,value){
+    if(!safePath(path))throw new Error('Unsupported field');
+    let node=root;
+    for(let i=0;i<path.length-1;i++){
+      const key=path[i];
+      if(!isObject(node[key]))node[key]={};
+      node=node[key];
+    }
+    node[path.at(-1)]=copy(value);
+  }
+  function applyPendingOps(root,ops){
+    if(!Array.isArray(ops))throw new Error('Invalid pending command');
+    for(const op of ops){
+      const path=op?.path;
+      if(!safePath(path))throw new Error('Invalid pending command');
+      let node=root;
+      for(let i=0;i<path.length-1;i++){
+        const key=path[i];
+        if(!isObject(node[key]))node[key]={};
+        node=node[key];
+      }
+      const key=path.at(-1);
+      if(op.remove)delete node[key]; else node[key]=copy(op.value);
+    }
+    return root;
+  }
+  function overlayPending(document,command){
+    const out=copy(validate(document));
+    if(command?.action!=='user_patch'||!isObject(command.payload)||!Array.isArray(command.payload.ops))return out;
+    if(!out.worlds?.[command.payload.world])return out;
+    try{applyPendingOps(out.user_data,command.payload.ops)}catch{return out}
+    return out;
+  }
+  async function submit(directory,world,value,path,onQueued=()=>{}){
     if(!directory)throw new Error('Connect the mod folder first');
-    if(!ops.length)return null;
+    if(!safePath(path)||path[0]!=='worlds'||path[1]!==world)throw new Error('Unsupported save target');
     const permission=await directory.requestPermission({mode:'readwrite'});
     if(permission!=='granted')throw new Error('Folder permission required');
     if(!navigator.locks)throw new Error('This browser cannot coordinate saves. Use Chrome or Edge.');
     return navigator.locks.request('breedingtool-mailbox',async()=>{
-    const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle('BreedingTool.json')).getFile()).text()));
-    if((await latestDocument()).transport?.protocol!==2)throw new Error('Breeding Tool Lua 2.1 required for saving.');
-    const mailbox='BreedingTool.command.json';
-    const occupied=async()=>{
-      try{await directory.getFileHandle(mailbox);return true}
-      catch(e){if(e.name==='NotFoundError')return false;throw e}
-    };
-    if(await occupied())throw new Error('A save is still pending. Wait for Lua and refresh before saving again.');
-    const id=crypto.randomUUID();
-    const command={command_id:id,action:'user_patch',payload:{world,ops}};
-    const write=async(name,text)=>{
-      const entry=await directory.getFileHandle(name,{create:true});
+      const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle('BreedingTool.json')).getFile()).text()));
+      const latest=await latestDocument();
+      if(latest.transport?.protocol!==2)throw new Error('Breeding Tool Lua 2.1 required for saving.');
+      const mailbox='BreedingTool.command.json';
+      const readMailbox=async()=>{
+        try{return JSON.parse(await(await(await directory.getFileHandle(mailbox)).getFile()).text())}
+        catch(e){if(e.name==='NotFoundError')return null;return null}
+      };
+      const removeMailbox=async()=>{
+        try{await directory.removeEntry(mailbox);return true}
+        catch(e){if(e.name==='NotFoundError')return true;throw e}
+      };
+      const existing=await readMailbox();
+      const pending=copy(latest.user_data);
+      let mergedExisting=false;
+      if(existing?.action==='user_patch'&&existing?.payload?.world===world&&Array.isArray(existing?.payload?.ops)){
+        try{applyPendingOps(pending,existing.payload.ops);mergedExisting=true}catch{}
+      }
+      setPath(pending,path,value);
+      const ops=diff(latest.user_data,pending,[]);
+      if(!ops.length){
+        if(mergedExisting||existing&&!existing.payload)await removeMailbox();
+        return {queued:false};
+      }
+      const id=crypto.randomUUID();
+      const command={command_id:id,action:'user_patch',payload:{world,ops}};
+      const entry=await directory.getFileHandle(mailbox,{create:true});
       const stream=await entry.createWritable();
-      try{await stream.write(text);await stream.close()}catch(e){await stream.abort().catch(()=>{});throw e}
-    };
-    await write(mailbox,JSON.stringify(command));
-    onWaiting('Waiting for Lua confirmation…');
-    for(let attempt=0;attempt<30;attempt++){
-      await new Promise(resolve=>setTimeout(resolve,500));
-      let latest;
-      try{latest=await latestDocument()}catch{continue}
-      const receipt=latest.transport?.last_command;
-      if(receipt?.command_id!==id||await occupied())continue;
-      if(receipt.status!=='applied')throw new Error('Concurrent edit: choices retained. Reload the saved choices before retrying.');
-      return latest;
-    }
-    throw new Error('Request queued; no Lua confirmation yet. Refresh to check the saved choices.');
+      try{await stream.write(JSON.stringify(command));await stream.close()}catch(e){await stream.abort().catch(()=>{});throw e}
+      onQueued('Queued ✓ — use Refresh in game to apply');
+      return {queued:true,command_id:id};
     });
   }
-  return {copy,same,validate,project,resolve,diff,submit};
+  return {copy,same,validate,project,resolve,diff,overlayPending,submit};
 })();

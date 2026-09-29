@@ -1517,12 +1517,11 @@ function renderAdvisor(){
       if(button)button.disabled=disabled;
     };
     try{
-      setSendUi('Writing latest BreedingTool.json…',true);
-      await sendBreedingPanel();
-      // sendBreedingPanel reloads the census and can re-render the Advisor, so resolve fresh DOM nodes.
-      setSendUi('Sent ✓',false);
+      setSendUi('Queuing pair…',true);
+      const result=await sendBreedingPanel();
+      setSendUi(result?.queued?'Queued ✓ — use Refresh in game to apply':'Already current ✓',false);
     }catch(err){
-      setSendUi(`Not sent: ${err.message||String(err)}`,false);
+      setSendUi(`Not queued: ${err.message||String(err)}`,false);
     }
   });
 }
@@ -1948,7 +1947,7 @@ function promptAddRole(){
 
 const LOCAL_POLL_MS=5000;
 const EXPECTED_GENETICS=['V','F','P','R','T','A','I'];
-let lastJsonText=null;
+let lastLocalStateSignature=null;
 let refreshInFlight=false;
 let currentPayload=null;
 let userDataDirty=false;
@@ -2050,10 +2049,10 @@ function renderBreedingPairPanel(){
   const femaleUid=breedingPanel.female_bt_id,maleUid=breedingPanel.male_bt_id;
   nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
   nextMaleName.textContent=maleUid===null?'Not selected':selectedPetName(maleUid);
-  breedingPairState.textContent=breedingPanelDirty?'Pending — not sent':'';
+  breedingPairState.textContent=breedingPanelDirty?'Pending — not queued':'';
   const status=breedingPairStatus();
   sendBreedingPairBtn.disabled=!status.valid;
-  sendBreedingPairBtn.title=status.reason||(!status.complete?'Select one female and one male.':'Write the current pair to BreedingTool.json');
+  sendBreedingPairBtn.title=status.reason||(!status.complete?'Select one female and one male.':'Queue the current pair for BreedingTool');
   sendBreedingPairBtn.classList.toggle('active',status.valid&&breedingPanelDirty);
 }
 
@@ -2334,6 +2333,16 @@ async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   const entry=await handle.getFileHandle(LOCAL_JSON_NAME);
   return (await entry.getFile()).text();
 }
+async function readDirectoryCommand(handle){
+  if(!handle)return null;
+  try{
+    const entry=await handle.getFileHandle('BreedingTool.command.json');
+    return (await entry.getFile()).text();
+  }catch(err){
+    if(err?.name==='NotFoundError')return null;
+    throw err;
+  }
+}
 
 const BTView={document:null,world:null,pinnedWorld:null,base:null,pairBase:null,drafts:new Map(),saving:false};
 const detailDrafts=new Map();
@@ -2367,13 +2376,12 @@ document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
   refreshJson(true);
 });
 async function sendBreedingPanel(){
-  if(BTView.saving)throw new Error('A save is already pending');
+  if(BTView.saving)throw new Error('A save is already in progress');
   if(!breedingPairStatus().valid)throw new Error(breedingPairStatus().reason);
   const world=BTView.world,submitted=BTData.copy(breedingPanel);
-  const ops=BTData.diff(BTView.pairBase,submitted,['worlds',world,'current_pair']);
   BTView.saving=true;
   try{
-    const latest=await BTData.submit(localDirectoryHandle,world,ops,message=>breedingPairState.textContent=message);
+    const result=await BTData.submit(localDirectoryHandle,world,submitted,['worlds',world,'current_pair'],message=>breedingPairState.textContent=message);
     if(world===BTView.world){
       breedingPanelDirty=!BTData.same(breedingPanel,submitted);
       BTView.pairBase=submitted;
@@ -2381,21 +2389,20 @@ async function sendBreedingPanel(){
       const draft=BTView.drafts.get(world);
       if(draft){draft.pairDirty=!BTData.same(draft.payload.breeding_panel,submitted);draft.pairBase=submitted}
     }
-    if(latest)applyCensus(latest);
-    breedingPairState.textContent='Pair saved';
+    breedingPairState.textContent=result?.queued?'Pair queued ✓ — use Refresh in game to apply':'Pair already current ✓';
+    return result;
   }finally{BTView.saving=false}
 }
 async function saveChoices(){
-  if(BTView.saving)throw new Error('A save is already pending');
+  if(BTView.saving)throw new Error('A save is already in progress');
   if(!currentPayload||!BTView.world)throw new Error('Wait for a world first');
   syncGraphUserData();
   const world=BTView.world,submitted=BTData.copy(currentPayload.user_data.graph);
   submitted.navigation={species:currentSpecies,view:BTData.copy(activeView),selected};
   submitted.advisor=BTData.copy(advisorState);
-  const ops=BTData.diff(BTView.base,submitted,['worlds',world,'graph']);
   BTView.saving=true;saveChoicesBtn.disabled=true;
   try{
-    const latest=await BTData.submit(localDirectoryHandle,world,ops,message=>importBadge.textContent=message);
+    const result=await BTData.submit(localDirectoryHandle,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message);
     if(world===BTView.world){
       syncGraphUserData();
       const now=BTData.copy(currentPayload.user_data.graph);
@@ -2409,10 +2416,10 @@ async function saveChoices(){
         draft.dirty=!BTData.same(now,submitted);draft.base=submitted;
       }
     }
-    if(latest)applyCensus(latest);
     saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';
     saveChoicesBtn.classList.toggle('active',userDataDirty);
-    importBadge.textContent='Choices saved';
+    importBadge.textContent=result?.queued?'Changes queued ✓ — use Refresh in game to apply':'Choices already current ✓';
+    return result;
   }finally{BTView.saving=false;saveChoicesBtn.disabled=false}
 }
 
@@ -2425,14 +2432,32 @@ async function pickJsonFile(){
   });
 }
 
-async function applyJsonText(text,source,force){
+async function applyJsonText(text,source,force,commandText=null){
   const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  if(text!==lastJsonText || force){
-    const payload=JSON.parse(text);
+  const signature=`${text}\u0000${commandText||''}`;
+  if(signature!==lastLocalStateSignature || force){
+    const persisted=JSON.parse(text);
+    let command=null,payload=persisted;
+    if(commandText){
+      try{command=JSON.parse(commandText);payload=BTData.overlayPending(persisted,command)}catch{}
+    }
     applyCensus(payload);
-    lastJsonText=text;
+    lastLocalStateSignature=signature;
     const count=Object.values(payload.worlds?.[BTView.world]?.pets||{}).filter(p=>p.stage==='adult').length;
-    importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
+    const ops=command?.payload?.world===BTView.world&&Array.isArray(command?.payload?.ops)?command.payload.ops:[];
+    const pairQueued=ops.some(op=>op?.path?.[0]==='worlds'&&op.path[1]===BTView.world&&op.path[2]==='current_pair');
+    if(ops.length){
+      importBadge.textContent='Changes queued ✓ — use Refresh in game to apply';
+      if(pairQueued){
+        breedingPairState.textContent='Pair queued ✓ — use Refresh in game to apply';
+        const advisorStateNode=document.getElementById('advisorSendState');
+        if(advisorStateNode)advisorStateNode.textContent='Queued ✓ — use Refresh in game to apply';
+      }
+    }else{
+      importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
+    }
+  }else if(commandText){
+    importBadge.textContent='Changes queued ✓ — use Refresh in game to apply';
   }else{
     importBadge.textContent=`JSON ${source}: up to date · ${now}`;
   }
@@ -2447,7 +2472,8 @@ async function connectDirectory(){
       const chosen=await window.showDirectoryPicker({id:DIRECTORY_PICKER_ID,mode:'readwrite'});
       const text=await readDirectoryJson(chosen,true,'readwrite');
       if(!text)throw new Error('Folder access was not granted');
-      await applyJsonText(text,'local',true);
+      const commandText=await readDirectoryCommand(chosen);
+      await applyJsonText(text,'local',true,commandText);
       localDirectoryHandle=chosen;
       updateConnectionControls();
       void rememberDirectory(chosen);
@@ -2484,7 +2510,8 @@ async function refreshJson(force=false){
       importBadge.textContent='JSON: folder permission required';
       return;
     }
-    await applyJsonText(text,'local',force);
+    const commandText=await readDirectoryCommand(handle);
+    await applyJsonText(text,'local',force,commandText);
     localDirectoryHandle=handle;
     updateConnectionControls();
   }catch(err){
@@ -2511,8 +2538,8 @@ refreshBtn.addEventListener('click',()=>localDirectoryHandle?refreshJson(true):c
 disconnectBtn.addEventListener('click',disconnectDirectory);
 saveChoicesBtn.addEventListener('click',()=>saveChoices().catch(err=>{
   if(err?.name!=='AbortError'){
-    importBadge.textContent=`Choices not saved (${err.message})`;
-    console.warn('BreedingTool.json choices not saved:',err);
+    importBadge.textContent=`Choices not queued (${err.message})`;
+    console.warn('BreedingTool choices not queued:',err);
   }
 }));
 refreshJson();
@@ -2600,10 +2627,10 @@ document.getElementById('clearBreedingPairBtn').addEventListener('click',()=>{
 sendBreedingPairBtn.addEventListener('click',async()=>{
   try{
     sendBreedingPairBtn.disabled=true;
-    breedingPairState.textContent='Reading latest local JSON…';
+    breedingPairState.textContent='Queuing pair…';
     await sendBreedingPanel();
   }catch(err){
-    breedingPairState.textContent=`Not sent: ${err.message||String(err)}`;
+    breedingPairState.textContent=`Not queued: ${err.message||String(err)}`;
   }finally{
     sendBreedingPairBtn.disabled=!breedingPairStatus().valid;
   }
