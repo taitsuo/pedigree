@@ -1,4 +1,4 @@
-/* Lua alone writes BreedingTool.json. Browser saves replace one passive mailbox snapshot. */
+/* Lua alone writes account datasets. Browser saves replace one passive mailbox snapshot. */
 globalThis.BTData=(()=>{
   const copy=value=>JSON.parse(JSON.stringify(value));
   const isObject=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
@@ -9,8 +9,9 @@ globalThis.BTData=(()=>{
     return false;
   };
   function validate(d){
-    if(d?.schema!=='BTPetCensus'||d.schema_version!==2||!isObject(d.worlds)||!isObject(d.user_data?.worlds)
-      ||JSON.stringify(d.genetics_order)!=='["V","F","P","R","T","A","I"]')throw new Error('Breeding Tool V2 census required');
+    if(d?.schema!=='BTPetCensus'||d.schema_version!==3||!isObject(d.worlds)||!isObject(d.user_data?.worlds)
+      ||JSON.stringify(d.genetics_order)!=='["V","F","P","R","T","A","I"]')throw new Error('Breeding Tool V3 account dataset required');
+    if(d.document_kind!=='active'||typeof d.account?.steam_id!=='string'||!/^\d{17}$/.test(d.account.steam_id)||typeof d.account?.steam_user!=='string'||!d.account.steam_user)throw new Error('Invalid account dataset');
     if(d.active_world!==null&&!d.worlds[d.active_world])throw new Error('Invalid active world');
     return d;
   }
@@ -81,31 +82,35 @@ globalThis.BTData=(()=>{
   }
   function overlayPending(document,command){
     const out=copy(validate(document));
-    if(command?.action!=='user_patch'||!isObject(command.payload)||!Array.isArray(command.payload.ops))return out;
+    if(command?.account_id!==out.account.steam_id||command?.action!=='user_patch'||!isObject(command.payload)||!Array.isArray(command.payload.ops))return out;
     if(!out.worlds?.[command.payload.world])return out;
     try{applyPendingOps(out.user_data,command.payload.ops)}catch{return out}
     return out;
   }
-  async function submit(directory,world,value,path,onQueued=()=>{}){
+  async function submit(directory,dataset,world,value,path,onQueued=()=>{}){
     if(!directory)throw new Error('Connect the mod folder first');
     if(!safePath(path)||path[0]!=='worlds'||path[1]!==world)throw new Error('Unsupported save target');
     const permission=await directory.requestPermission({mode:'readwrite'});
     if(permission!=='granted')throw new Error('Folder permission required');
     if(!navigator.locks)throw new Error('This browser cannot coordinate saves. Use Chrome or Edge.');
     return navigator.locks.request('breedingtool-mailbox',async()=>{
-      const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle('BreedingTool.json')).getFile()).text()));
+      const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle(dataset.filename)).getFile()).text()));
       const latest=await latestDocument();
-      if(latest.transport?.protocol!==2)throw new Error('Breeding Tool Lua 2.1 required for saving.');
+      if(latest.account.steam_id!==dataset.account_id)throw new Error('Dataset account changed');
+      if(!latest.worlds[world])throw new Error('Prospect is no longer active');
+      if(latest.transport?.protocol!==3)throw new Error('Breeding Tool Lua 4.0 required for saving.');
       const mailbox='BreedingTool.command.json';
       const readMailbox=async()=>{
         try{return JSON.parse(await(await(await directory.getFileHandle(mailbox)).getFile()).text())}
-        catch(e){if(e.name==='NotFoundError')return null;return null}
+        catch(e){if(e.name==='NotFoundError')return null;throw new Error('Mailbox unreadable or being written; try again')}
       };
       const removeMailbox=async()=>{
         try{await directory.removeEntry(mailbox);return true}
         catch(e){if(e.name==='NotFoundError')return true;throw e}
       };
       const existing=await readMailbox();
+      if(existing && existing.account_id!==dataset.account_id)throw new Error('Mailbox contains a command for another account. Open that account to apply or cancel it.');
+      if(existing && (existing.action!=='user_patch'||existing.payload?.world!==world||!Array.isArray(existing.payload?.ops)))throw new Error('Mailbox contains another pending command');
       const pending=copy(latest.user_data);
       let mergedExisting=false;
       if(existing?.action==='user_patch'&&existing?.payload?.world===world&&Array.isArray(existing?.payload?.ops)){
@@ -118,7 +123,7 @@ globalThis.BTData=(()=>{
         return {queued:false};
       }
       const id=crypto.randomUUID();
-      const command={command_id:id,action:'user_patch',payload:{world,ops}};
+      const command={account_id:dataset.account_id,command_id:id,action:'user_patch',payload:{world,ops}};
       const entry=await directory.getFileHandle(mailbox,{create:true});
       const stream=await entry.createWritable();
       try{await stream.write(JSON.stringify(command));await stream.close()}catch(e){await stream.abort().catch(()=>{});throw e}
@@ -126,5 +131,28 @@ globalThis.BTData=(()=>{
       return {queued:true,command_id:id};
     });
   }
-  return {copy,same,validate,project,resolve,diff,overlayPending,submit};
+  async function discover(directory){
+    const found=[],accounts=new Set();
+    for await(const [filename,entry] of directory.entries()){
+      if(entry.kind!=='file'||!/^BreedingTool_.+\.json$/i.test(filename)||/_Archive\.json$/i.test(filename))continue;
+      let d;
+      try{d=validate(JSON.parse(await(await entry.getFile()).text()))}catch{continue}
+      if(accounts.has(d.account.steam_id))throw new Error('Several datasets belong to the same account');
+      accounts.add(d.account.steam_id);
+      found.push({filename,account_id:d.account.steam_id,label:d.account.steam_user});
+    }
+    return found.sort((a,b)=>a.label.localeCompare(b.label));
+  }
+  async function cancelPending(directory,dataset){
+    if(!navigator.locks)throw new Error('This browser cannot coordinate saves');
+    return navigator.locks.request('breedingtool-mailbox',async()=>{
+      const name='BreedingTool.command.json';
+      let c;
+      try{c=JSON.parse(await(await(await directory.getFileHandle(name)).getFile()).text())}
+      catch(e){if(e.name==='NotFoundError')return;throw e}
+      if(c.account_id!==dataset.account_id)throw new Error('Select the account owning this command first');
+      await directory.removeEntry(name);
+    });
+  }
+  return {discover,cancelPending,copy,same,validate,project,resolve,diff,overlayPending,submit};
 })();

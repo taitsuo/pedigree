@@ -154,7 +154,7 @@ function generationMap(list,nodeById){
   return generations;
 }
 
-// The board contains no embedded census. Every node is rebuilt from BreedingTool.json.
+// The board contains no embedded census. Every node is rebuilt from the account dataset.
 const DATA = {nodes:[]};
 let byId = new Map(DATA.nodes.map(n=>[n.id,n]));
 let childrenByParentId=new Map(),siblingsById=new Map();
@@ -1383,7 +1383,7 @@ function renderAdvisorControls(){
     advisorRoleRow.innerHTML=`
       <strong>Purpose</strong>
       <span class="advisor-purpose-status unknown">Capability unknown</span>
-      <span class="advisor-role-help">BreedingTool.json does not expose mountability yet. The Advisor deliberately does not guess from species names or a hard-coded list.</span>`;
+      <span class="advisor-role-help">the account dataset does not expose mountability yet. The Advisor deliberately does not guess from species names or a hard-coded list.</span>`;
   }
   advisorObjectives.innerHTML=ADVISOR_OBJECTIVES.map(item=>`<button type="button" class="advisor-objective ${advisorState.objective===item.key?'active':''}" data-advisor-objective="${item.key}"><strong>${esc(item.title)}</strong><span>${esc(item.help)}</span></button>`).join('');
   advisorObjectives.querySelectorAll('[data-advisor-objective]').forEach(button=>button.addEventListener('click',()=>{
@@ -1687,7 +1687,7 @@ function renderSelectedDetail(id){
     detail.querySelectorAll('[data-detail-field]').forEach(el=>{
       edits[key][el.dataset.detailField]=el.dataset.detailField==='breedingActive'?el.value==='true':el.value;
     });
-    detailDrafts.delete(id); saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
+    detailDrafts.delete(draftKey(id)); saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
     const state=document.getElementById('detailSaveState'); if(state)state.textContent='Saved ✓';
   };
   const detailDraftChanged=()=>[...detail.querySelectorAll('[data-detail-field]')].some(el=>{
@@ -1699,15 +1699,15 @@ function renderSelectedDetail(id){
   const syncDetailSaveButton=()=>{
     const button=document.getElementById('saveDetailBtn');
     const changed=detailDraftChanged();
-    if(changed)detailDrafts.set(id,Object.fromEntries([...detail.querySelectorAll('[data-detail-field]')].map(el=>[el.dataset.detailField,el.value])));
-    else detailDrafts.delete(id);
+    if(changed)detailDrafts.set(draftKey(id),Object.fromEntries([...detail.querySelectorAll('[data-detail-field]')].map(el=>[el.dataset.detailField,el.value])));
+    else detailDrafts.delete(draftKey(id));
     button.classList.toggle('primary-control',changed);
     button.textContent=changed?'Save annotations *':'Save annotations';
     if(changed){const state=document.getElementById('detailSaveState');if(state)state.textContent=''}
   };
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
   detail.querySelectorAll('[data-detail-field]').forEach(el=>el.addEventListener(el.matches('select')?'change':'input',syncDetailSaveButton));
-  const retainedDraft=detailDrafts.get(id);
+  const retainedDraft=detailDrafts.get(draftKey(id));
   if(retainedDraft)detail.querySelectorAll('[data-detail-field]').forEach(el=>{if(Object.hasOwn(retainedDraft,el.dataset.detailField))el.value=retainedDraft[el.dataset.detailField]});
   syncDetailSaveButton();
   if(focusState){
@@ -2089,7 +2089,10 @@ function setBreedingSelection(n){
   if(activated){updateCategoryNavigation();render()}
   renderSelectedDetail(n.id);
 }
-const LOCAL_JSON_NAME='BreedingTool.json';
+let selectedDataset=null;
+let availableDatasets=[];
+const accountSelect=document.getElementById('accountSelect');
+const draftKey=(world,account=BTView.document?.account?.steam_id)=>`${account}:${world}`;
 const DIRECTORY_DB='breeding-tool-local-source';
 const DIRECTORY_STORE='handles';
 const DIRECTORY_PICKER_ID='breeding-tool-json-folder';
@@ -2124,10 +2127,15 @@ function nameKey(species,name){
 
 function applyCensus(document){
   validateCensus(document);
+  const accountChanged=BTView.document?.account?.steam_id!==document.account.steam_id;
+  if(accountChanged){
+    stashWorldDraft(); BTView.world=null; BTView.pinnedWorld=null;
+    userDataDirty=false; breedingPanelDirty=false;
+  }
   const nextWorld=BTView.pinnedWorld&&document.worlds[BTView.pinnedWorld]?BTView.pinnedWorld:document.active_world;
-  const entering=BTView.world!==nextWorld;
+  const entering=accountChanged||BTView.world!==nextWorld;
   if(entering){
-    stashWorldDraft();
+    if(!accountChanged)stashWorldDraft();
     userDataDirty=false; breedingPanelDirty=false;
     selected=null; currentSpecies=''; activeView={kind:'species',key:null};
     Object.assign(advisorState,{chosenPairKey:null,selectedFemaleUid:null,selectedMaleUid:null});
@@ -2141,14 +2149,14 @@ function applyCensus(document){
     Object.assign(advisorState,payload.user_data.graph.advisor||{});
   }
   selected=BTData.resolve(document.worlds[nextWorld],selected);
-  const draft=BTView.drafts.get(nextWorld);
+  const draft=BTView.drafts.get(draftKey(nextWorld));
   if(draft&&!userDataDirty&&!breedingPanelDirty){
     hydrateGraphUserData(draft.payload); hydrateBreedingPanel(draft.payload);
     userDataDirty=draft.dirty; breedingPanelDirty=draft.pairDirty;
     selected=draft.selected; currentSpecies=draft.species; activeView=draft.view;
     Object.assign(advisorState,draft.advisor);
     BTView.base=draft.base; BTView.pairBase=draft.pairBase;
-    BTView.drafts.delete(nextWorld);
+    BTView.drafts.delete(draftKey(nextWorld));
   }
   if(!userDataDirty)BTView.base=BTData.copy(document.user_data.worlds[nextWorld]?.graph||{});
   if(!breedingPanelDirty)BTView.pairBase=BTData.copy(document.user_data.worlds[nextWorld]?.current_pair||{});
@@ -2330,7 +2338,8 @@ async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   let permission=await handle.queryPermission({mode});
   if(permission!=='granted' && requestPermission)permission=await handle.requestPermission({mode});
   if(permission!=='granted')return null;
-  const entry=await handle.getFileHandle(LOCAL_JSON_NAME);
+  if(!selectedDataset)return null;
+  const entry=await handle.getFileHandle(selectedDataset.filename);
   return (await entry.getFile()).text();
 }
 async function readDirectoryCommand(handle){
@@ -2351,7 +2360,7 @@ function stashWorldDraft(){
   if(!currentPayload||!BTView.world)return;
   if(userDataDirty)syncGraphUserData();
   const payload=BTData.copy(currentPayload);payload.breeding_panel=BTData.copy(breedingPanel);
-  BTView.drafts.set(BTView.world,{payload,base:BTData.copy(BTView.base),pairBase:BTData.copy(BTView.pairBase),
+  BTView.drafts.set(draftKey(BTView.world),{payload,base:BTData.copy(BTView.base),pairBase:BTData.copy(BTView.pairBase),
     dirty:userDataDirty,pairDirty:breedingPanelDirty,selected,species:currentSpecies,view:BTData.copy(activeView),advisor:BTData.copy(advisorState)});
 }
 function updateWorldControls(){
@@ -2370,23 +2379,25 @@ document.getElementById('worldSelect').addEventListener('change',event=>{
 document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
   if(BTView.saving)return;
   if((userDataDirty||breedingPanelDirty)&&!confirm('Discard unsaved choices for this world and reload the saved version?'))return;
-  BTView.drafts.delete(BTView.world);userDataDirty=false;breedingPanelDirty=false;
-  for(const id of detailDrafts.keys())if(id.startsWith(BTView.world+':'))detailDrafts.delete(id);
+  BTView.drafts.delete(draftKey(BTView.world));userDataDirty=false;breedingPanelDirty=false;
+  for(const id of detailDrafts.keys())if(id.startsWith(draftKey(BTView.world)+':'))detailDrafts.delete(id);
   if(BTView.document)applyCensus(BTView.document);
   refreshJson(true);
 });
 async function sendBreedingPanel(){
   if(BTView.saving)throw new Error('A save is already in progress');
   if(!breedingPairStatus().valid)throw new Error(breedingPairStatus().reason);
+  const dataset=selectedDataset;
+  if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
   const world=BTView.world,submitted=BTData.copy(breedingPanel);
   BTView.saving=true;
   try{
-    const result=await BTData.submit(localDirectoryHandle,world,submitted,['worlds',world,'current_pair'],message=>breedingPairState.textContent=message);
-    if(world===BTView.world){
+    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'current_pair'],message=>breedingPairState.textContent=message);
+    if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
       breedingPanelDirty=!BTData.same(breedingPanel,submitted);
       BTView.pairBase=submitted;
     }else{
-      const draft=BTView.drafts.get(world);
+      const draft=BTView.drafts.get(draftKey(world,dataset.account_id));
       if(draft){draft.pairDirty=!BTData.same(draft.payload.breeding_panel,submitted);draft.pairBase=submitted}
     }
     breedingPairState.textContent=result?.queued?'Pair queued ✓ — use Refresh in game to apply':'Pair already current ✓';
@@ -2397,20 +2408,22 @@ async function saveChoices(){
   if(BTView.saving)throw new Error('A save is already in progress');
   if(!currentPayload||!BTView.world)throw new Error('Wait for a world first');
   syncGraphUserData();
+  const dataset=selectedDataset;
+  if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
   const world=BTView.world,submitted=BTData.copy(currentPayload.user_data.graph);
   submitted.navigation={species:currentSpecies,view:BTData.copy(activeView),selected};
   submitted.advisor=BTData.copy(advisorState);
   BTView.saving=true;saveChoicesBtn.disabled=true;
   try{
-    const result=await BTData.submit(localDirectoryHandle,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message);
-    if(world===BTView.world){
+    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message);
+    if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
       syncGraphUserData();
       const now=BTData.copy(currentPayload.user_data.graph);
       now.navigation=submitted.navigation;now.advisor=submitted.advisor;
       userDataDirty=!BTData.same(now,submitted);
       BTView.base=submitted;
     }else{
-      const draft=BTView.drafts.get(world);
+      const draft=BTView.drafts.get(draftKey(world,dataset.account_id));
       if(draft){
         const now=BTData.copy(draft.payload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;
         draft.dirty=!BTData.same(now,submitted);draft.base=submitted;
@@ -2437,9 +2450,10 @@ async function applyJsonText(text,source,force,commandText=null){
   const signature=`${text}\u0000${commandText||''}`;
   if(signature!==lastLocalStateSignature || force){
     const persisted=JSON.parse(text);
+    if(selectedDataset&&persisted.account?.steam_id!==selectedDataset.account_id)throw new Error('Dataset account changed');
     let command=null,payload=persisted;
     if(commandText){
-      try{command=JSON.parse(commandText);payload=BTData.overlayPending(persisted,command)}catch{}
+      try{command=JSON.parse(commandText);if(command.account_id!==persisted.account.steam_id)command=null;payload=BTData.overlayPending(persisted,command)}catch{}
     }
     applyCensus(payload);
     lastLocalStateSignature=signature;
@@ -2456,7 +2470,7 @@ async function applyJsonText(text,source,force,commandText=null){
     }else{
       importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
     }
-  }else if(commandText){
+  }else if(commandText && JSON.parse(commandText)?.account_id===BTView.document?.account?.steam_id){
     importBadge.textContent='Changes queued ✓ — use Refresh in game to apply';
   }else{
     importBadge.textContent=`JSON ${source}: up to date · ${now}`;
@@ -2464,12 +2478,21 @@ async function applyJsonText(text,source,force,commandText=null){
 }
 
 async function connectDirectory(){
-  if(refreshInFlight)return;
+  if(refreshInFlight||BTView.saving)return;
   refreshInFlight=true;
   importBadge.textContent='JSON: selecting folder…';
   try{
     if('showDirectoryPicker' in window){
       const chosen=await window.showDirectoryPicker({id:DIRECTORY_PICKER_ID,mode:'readwrite'});
+      if(await chosen.requestPermission({mode:'readwrite'})!=='granted')throw new Error('Folder permission required');
+      const datasets=await BTData.discover(chosen);
+      if(!datasets.length)throw new Error('No valid account datasets found');
+      stashWorldDraft();
+      localDirectoryHandle=chosen; availableDatasets=datasets;
+      selectedDataset=datasets.length===1?datasets[0]:null;
+      updateAccountControls();
+      updateConnectionControls(); void rememberDirectory(chosen);
+      if(!selectedDataset){importBadge.textContent='Select an account';return}
       const text=await readDirectoryJson(chosen,true,'readwrite');
       if(!text)throw new Error('Folder access was not granted');
       const commandText=await readDirectoryCommand(chosen);
@@ -2480,6 +2503,7 @@ async function connectDirectory(){
     }else{
       const text=await pickJsonFile();
       if(!text)throw new DOMException('Selection cancelled','AbortError');
+      selectedDataset=null;localDirectoryHandle=null;availableDatasets=[];updateAccountControls();
       await applyJsonText(text,'selected file',true);
     }
   }catch(err){
@@ -2495,7 +2519,7 @@ async function connectDirectory(){
 }
 
 async function refreshJson(force=false){
-  if(refreshInFlight)return;
+  if(refreshInFlight||BTView.saving)return;
   refreshInFlight=true;
   if(force)importBadge.textContent='JSON: refreshing…';
   try{
@@ -2505,6 +2529,16 @@ async function refreshJson(force=false){
       importBadge.textContent='JSON: not connected';
       return;
     }
+    if(await handle.queryPermission({mode:'read'})!=='granted'){
+      if(!force||await handle.requestPermission({mode:'readwrite'})!=='granted'){importBadge.textContent='JSON: folder permission required';return}
+    }
+    if(!localDirectoryHandle||force){
+      availableDatasets=await BTData.discover(handle);
+      selectedDataset=availableDatasets.find(d=>d.account_id===selectedDataset?.account_id&&d.filename===selectedDataset?.filename)||(availableDatasets.length===1?availableDatasets[0]:null);
+      localDirectoryHandle=handle;updateAccountControls();updateConnectionControls();
+    }
+    if(!selectedDataset){importBadge.textContent=availableDatasets.length?'Select an account':'No valid account datasets found';return}
+    if(BTView.saving)return;
     const text=await readDirectoryJson(handle,force,force?'readwrite':'read');
     if(!text){
       importBadge.textContent='JSON: folder permission required';
@@ -2517,7 +2551,7 @@ async function refreshJson(force=false){
   }catch(err){
     updateConnectionControls();
     importBadge.textContent=`JSON: unavailable (${err.message})`;
-    console.warn('BreedingTool.json unavailable:',err);
+    console.warn('the account dataset unavailable:',err);
   }finally{
     refreshInFlight=false;
   }
@@ -2530,10 +2564,28 @@ async function disconnectDirectory(){
     localDirectoryHandle=null;
     console.warn('Could not remove the saved folder handle:',err);
   }
+  localDirectoryHandle=null;selectedDataset=null;availableDatasets=[];updateAccountControls();
   updateConnectionControls();
   importBadge.textContent=currentPayload?'JSON: disconnected · snapshot retained':'JSON: not connected';
 }
 
+function updateAccountControls(){
+  accountSelect.replaceChildren(new Option('Select account',''));
+  for(const d of availableDatasets)accountSelect.add(new Option(d.label,d.filename));
+  accountSelect.value=selectedDataset?.filename||'';
+}
+accountSelect.addEventListener('change',async()=>{
+  if(refreshInFlight||BTView.saving){updateAccountControls();return}
+  selectedDataset=availableDatasets.find(d=>d.filename===accountSelect.value)||null;
+  lastLocalStateSignature=null;
+  await refreshJson();
+});
+document.getElementById('cancelCommandBtn').addEventListener('click',async()=>{
+  if(refreshInFlight||BTView.saving||!localDirectoryHandle||!selectedDataset)return;
+  if(!confirm('Cancel the pending command for this account? Unsaved drafts are retained.'))return;
+  try{await BTData.cancelPending(localDirectoryHandle,selectedDataset);await refreshJson(true)}
+  catch(e){importBadge.textContent=e.message}
+});
 refreshBtn.addEventListener('click',()=>localDirectoryHandle?refreshJson(true):connectDirectory());
 disconnectBtn.addEventListener('click',disconnectDirectory);
 saveChoicesBtn.addEventListener('click',()=>saveChoices().catch(err=>{
