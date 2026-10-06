@@ -276,11 +276,13 @@ function roleClass(n){
   const role=String(n.role||'').trim().toLocaleLowerCase();
   return ['reserve','experimental','retired'].includes(role)?` role-${role}`:'';
 }
-function presenceLabel(n){return n.historical?'Historical':n.isPresent?'Present':'Missing'}
+function presenceLabel(n){return n.lifecycleState==='ARCHIVED'?'Archived':n.historical?'Historical':'Active'}
 function presenceClass(n){return n.historical?'historical':n.isPresent?'active':'inactive'}
 function automaticInactiveReason(n){
-  if(n.historical)return 'Historical UID: automatically inactive for breeding';
-  if(!n.isPresent)return 'Missing from the latest F7 census: automatically inactive for breeding';
+  if(n.lifecycleState==='ARCHIVED')return 'Archived animal: retained for history and pedigree';
+  if(n.historical)return 'Historical animal: inactive for breeding';
+  if(n.lifecycleState!=='ACTIVE')return 'Not an active animal';
+  if(n.stage!=='adult')return 'Juvenile: not yet a breeder';
   return '';
 }
 function sexRank(n){return n.sex==='F'?0:n.sex==='M'?2:1}
@@ -515,7 +517,7 @@ function getVisibleNodes(){
 function nodeMatchesSearch(n,query=search.value.trim().toLowerCase()){
   if(!query)return true;
   return [
-    n.name,...(n.previousNames||[]),n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.runtime_uid??''),String(n.level??''),String(n.experience??'')
+    n.name,n.nickname,n.bloodline,n.role,n.notes,n.sex,statsText(n),String(n.total7),String(n.usefulScore),String(n.runtime_uid??''),String(n.level??''),String(n.experience??'')
   ].join(' ').toLowerCase().includes(query);
 }
 
@@ -1006,7 +1008,7 @@ function updateCategoryNavigation(){
   const pop=currentSpeciesNodes();
   const females=pop.filter(n=>n.sex==='F').length,males=pop.filter(n=>n.sex==='M').length;
   const present=pop.filter(n=>n.isPresent===true).length;
-  populationBadge.textContent=`Population: ${females} F / ${males} M / ${present} present / ${pop.length} total`;
+  populationBadge.textContent=`Population: ${females} F / ${males} M / ${present} active / ${pop.length} total`;
   updateInactiveToggle();
   updateUsefulConfig();
   return previousSpecies!==currentSpecies||previousKind!==activeView.kind||previousKey!==activeView.key||previousScopeKind!==activeView.scopeKind||previousScopeKey!==activeView.scopeKey;
@@ -1118,7 +1120,7 @@ function updateViewChrome(){
 function advisorEligibleBreeders(){
   applyBoardEdits();
   return specialViewScopeNodes().filter(n=>
-    (!hideInactive||n.breedingActive) && n.isPresent===true && !n.historical && nodeMatchesSearch(n) &&
+    (!hideInactive||n.breedingActive) && n.lifecycleState==='ACTIVE' && !n.historical && nodeMatchesSearch(n) &&
     stablePetId(n.bt_id)!==null && n.stage==='adult' && n.stats.every(Number.isFinite) && (n.sex==='F'||n.sex==='M')
   );
 }
@@ -1136,6 +1138,8 @@ function advisorParentIndex(n,mask){
 function advisorTwinSignature(n){
   const mother=String(n.mother||'');
   const father=String(n.father||'');
+  const twinRoot=n.twinSource||n.bt_id;
+  if(!father&&mother&&twinRoot)return [nodeSpeciesKey(n),n.sex,mother,twinRoot,...n.stats].join('|');
   // Without both stable parent links we cannot safely infer a sibling/twin-equivalent group.
   if(!mother||!father)return null;
   const stats=(n.stats||[]).map(value=>value===null||value===undefined?'?':String(value)).join(',');
@@ -1644,7 +1648,11 @@ function renderSelectedDetail(id){
   const statHtml=(n.stats||[]).map((v,i)=>`<div class="stat ${statClass(i,v,nodeSpeciesKey(n))}"><label>${STAT_LABELS[i]}</label><b>${v??'—'}</b></div>`).join('');
   const kids=offspringOf(id);
   const siblings=siblingsOf(n);
-  const parentButtons=[n.mother,n.father].filter(Boolean).map(pid=>byId.get(pid)).filter(Boolean).map(p=>`<button class="linkbtn" data-id="${esc(p.id)}">${esc(displayName(p))}</button>`).join('')||'<span class="small">None</span>';
+  const parentButtons=['mother','father'].map(side=>{
+    const parent=n[side]&&byId.get(n[side]);
+    if(parent)return `<button class="linkbtn" data-id="${esc(parent.id)}">${esc(displayName(parent))}</button>`;
+    const label=n[side+'Label'];return label?`<span class="small">${side==='mother'?'Mother':'Father'}: ${esc(label)} (recorded name)</span>`:'';
+  }).join('')||'<span class="small">None</span>';
   const siblingButtons=siblings.map(peer=>`<button class="linkbtn" data-id="${esc(peer.id)}">${esc(displayName(peer))}</button>`).join('')||'<span class="small">None</span>';
   const childButtons=kids.map(k=>`<button class="linkbtn" data-id="${esc(k.id)}">${esc(displayName(k))}</button>`).join('')||'<span class="small">None</span>';
   detail.innerHTML=`
@@ -1825,8 +1833,8 @@ function petNameWithUid(n){
   return n?`${displayName(n)} (${n.runtime_uid??'—'})`:'—';
 }
 function parentDisplay(n){
-  const m=n.mother?(byId.has(n.mother)?petNameWithUid(byId.get(n.mother)):n.mother):'—';
-  const f=n.father?(byId.has(n.father)?petNameWithUid(byId.get(n.father)):n.father):'—';
+  const m=n.mother?(byId.has(n.mother)?petNameWithUid(byId.get(n.mother)):n.mother):(n.motherLabel||'—');
+  const f=n.father?(byId.has(n.father)?petNameWithUid(byId.get(n.father)):n.father):(n.fatherLabel||'—');
   return `${m} × ${f}`;
 }
 function boardNodes(){
@@ -1849,14 +1857,14 @@ function renderBreedingTable(){
   wrap.style.display='none';
   breedingTableWrap.style.display='block';
   setViewHeading(`Board — ${specialViewScopeLabel()}`,specialViewScope().kind==='bloodline'
-    ? `Bloodline ${specialViewScope().key} within ${speciesLabel(currentSpecies)}. Presence comes from F7; missing and historical pets are automatically inactive.`
-    : 'Presence comes from F7. Missing and historical pets are automatically inactive; present pets remain a reversible personal choice.');
+    ? `Bloodline ${specialViewScope().key} within ${speciesLabel(currentSpecies)}. Archived animals remain in history and pedigree; only active adults can breed.`
+    : 'Active adults are eligible for breeding, subject to your choices. Archived animals remain available for history and pedigree.');
   const list=boardNodes();
   const scopeNodes=specialViewScopeNodes();
   const scopeTotal=scopeNodes.length;
   countText.textContent=`${list.length} shown / ${scopeTotal} in scope`;
   breedingCountHint.textContent=`${scopeNodes.filter(n=>!n.breedingActive).length} inactive`;
-  const headers=[['name','Name / ID'],['nickname','Nickname'],['sex','Sex'],['bloodline','Lineage'],['s0','V'],['s1','F'],['s2','P'],['s3','R'],['s4','T'],['s5','A'],['s6','I'],['usefulScore',usefulLabel()],['total7','Total'],['level','Lvl'],['isPresent','Presence'],['breedingActive','Breeding status'],['role','Role']];
+  const headers=[['name','Name / ID'],['nickname','Nickname'],['sex','Sex'],['bloodline','Lineage'],['s0','V'],['s1','F'],['s2','P'],['s3','R'],['s4','T'],['s5','A'],['s6','I'],['usefulScore',usefulLabel()],['total7','Total'],['level','Lvl'],['lifecycleState','Lifecycle'],['breedingActive','Breeding status'],['role','Role']];
   breedingTable.innerHTML=`<thead><tr>${headers.map(([k,l])=>`<th data-sort="${k}">${l}</th>`).join('')}</tr></thead><tbody></tbody>`;
   const tbody=breedingTable.querySelector('tbody');
   for(const n of list){
@@ -2037,7 +2045,7 @@ function breederAssignmentBlockReason(n){
   if(n.stage!=='adult')return 'Only confirmed adults can be assigned';
   const uid=stablePetId(n.bt_id);
   if(uid===null)return 'A persistent non-negative Icarus UID is required';
-  if(n.historical||n.isPresent===false)return '/!\\ this animal is missing';
+  if(n.lifecycleState!=='ACTIVE'||n.historical||n.stage!=='adult')return 'Only active adult animals can be selected';
   if(n.sex!=='F'&&n.sex!=='M')return 'A known female or male sex is required';
   const otherUid=breedingPanel[n.sex==='F'?'male_bt_id':'female_bt_id'];
   const other=petByPersistentUid(otherUid);
@@ -2121,10 +2129,6 @@ function numericUid(value){return stablePetId(value)}
 
 function petId(uid){return uid}
 
-function nameKey(species,name){
-  return `${species}\u0000${canonicalName(name).toLocaleLowerCase()}`;
-}
-
 function applyCensus(document){
   validateCensus(document);
   const accountChanged=BTView.document?.account?.steam_id!==document.account.steam_id;
@@ -2168,24 +2172,23 @@ function applyCensus(document){
   currentPayload=payload;
   if(userDataDirty)syncGraphUserData();
 
-  const validPets=payload.pets.filter(p=>p.stage==='adult'&&stablePetId(p.bt_id));
+  const validPets=payload.pets.filter(p=>p.lifecycle_state!=='TRACKED'&&stablePetId(p.bt_id));
   const nodes=[];
   const importedByUid=new Map();
   const importedByPet=new Map();
-  const importedBySpeciesName=new Map();
-
+  
   // PASS 1: rebuild one stable node per UID. No save-specific data is embedded.
   for(const [sourceIndex,p] of validPets.entries()){
     const uid=numericUid(p.bt_id);
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const stats=p.genetics.map(value=>value===null?null:Number(value));
     const historical=p.historical===true;
-    const isPresent=typeof p.present==='boolean'?p.present:null;
+    const isPresent=p.lifecycle_state==='ACTIVE';
     const n={
       id:petId(uid),
-      bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,
+      bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,lifecycleState:p.lifecycle_state,
+      twinSource:p.twin_source??null,motherLabel:p.mother||'',fatherLabel:p.father||'',
       name:canonicalName(p.name)||'Unnamed',
-      previousNames:Array.isArray(p.previous_names)?p.previous_names.map(canonicalName).filter(Boolean):[],
       actor_class:p.actor_class||'',
       species_key:species,
       sex:p.sex==='Female'?'F':p.sex==='Male'?'M':'?',
@@ -2206,56 +2209,21 @@ function applyCensus(document){
     importedByPet.set(p,n);
     if(uid!==null)importedByUid.set(uid,n);
 
-    for(const name of [n.name,...n.previousNames]){
-      const key=nameKey(species,name);
-      if(!importedBySpeciesName.has(key))importedBySpeciesName.set(key,[]);
-      importedBySpeciesName.get(key).push(n);
-    }
+
   }
 
   DATA.nodes=nodes;
   rebuildIndex();
 
-  function firstSeenTimestamp(node){
-    const value=node?.firstSeen;
-    if(value===null||value===undefined||value==='')return null;
-    const numeric=Number(value);
-    if(Number.isFinite(numeric))return numeric;
-    if(typeof value==='string'){
-      const parsed=Date.parse(value);
-      if(Number.isFinite(parsed))return parsed;
-    }
-    return null;
-  }
-
-  function uniqueNamedParent(species,label,expectedSex,child){
-    if(!canonicalName(label))return null;
-    const childSeen=firstSeenTimestamp(child);
-    const candidates=(importedBySpeciesName.get(nameKey(species,label))||[])
-      .filter(candidate=>candidate.sex===expectedSex && candidate.id!==child?.id)
-      .filter(candidate=>{
-        const candidateSeen=firstSeenTimestamp(candidate);
-        // Initial-census animals may legitimately share exactly the same first_seen.
-        // Reject only candidates proven to have appeared after the child.
-        return childSeen===null || candidateSeen===null || candidateSeen<=childSeen;
-      });
-    return candidates.length===1?candidates[0]:null;
-  }
-
-  // PASS 2: parent BT_ID is authoritative. Names are only a legacy fallback,
-  // protected against impossible future-parent matches by first_seen.
+  // Deterministic BT_ID links only; parent labels remain historical metadata.
   for(const p of validPets){
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const n=importedByPet.get(p);
     if(!n)continue;
     const motherUid=numericUid(p.mother_bt_id);
     const fatherUid=numericUid(p.father_bt_id);
-    const mom=motherUid!==null
-      ? importedByUid.get(motherUid)
-      : uniqueNamedParent(species,p.mother,'F',n);
-    const dad=fatherUid!==null
-      ? importedByUid.get(fatherUid)
-      : uniqueNamedParent(species,p.father,'M',n);
+    const mom=motherUid!==null?importedByUid.get(motherUid):null;
+    const dad=fatherUid!==null?importedByUid.get(fatherUid):null;
     n.mother=mom?.id||null;
     n.father=dad?.id||null;
   }

@@ -9,15 +9,20 @@ globalThis.BTData=(()=>{
     return false;
   };
   function validate(d){
-    if(d?.schema!=='BTPetCensus'||d.schema_version!==3||!isObject(d.worlds)||!isObject(d.user_data?.worlds)
-      ||JSON.stringify(d.genetics_order)!=='["V","F","P","R","T","A","I"]')throw new Error('Breeding Tool V3 account dataset required');
+    if(d?.schema!=='BTPetCensus'||d.schema_version!==4||!isObject(d.worlds)||!isObject(d.user_data?.worlds)
+      ||JSON.stringify(d.genetics_order)!=='["V","F","P","R","T","A","I"]')throw new Error('Breeding Tool V4 account dataset required');
     if(d.document_kind!=='active'||typeof d.account?.steam_id!=='string'||!/^\d{17}$/.test(d.account.steam_id)||typeof d.account?.steam_user!=='string'||!d.account.steam_user)throw new Error('Invalid account dataset');
     if(d.active_world!==null&&!d.worlds[d.active_world])throw new Error('Invalid active world');
+    for(const w of Object.values(d.worlds)){
+      if(!isObject(w.pets)||!isObject(w.runtime?.pending_gestations)||w.runtime.identity_redirects!==undefined)throw new Error('Invalid V4 world');
+      for(const p of Object.values(w.pets)){
+        if(!['TRACKED','ACTIVE','ARCHIVED'].includes(p.lifecycle_state))throw new Error('Invalid lifecycle');
+        if(['presence','previous_name','last_seen','field_sources','lifecycle_evidence'].some(k=>k in p))throw new Error('Retired pet fields: amend dataset manually');
+      }
+    }
     return d;
   }
   function resolve(w,id){
-    const seen=new Set();
-    while(id&&w?.runtime?.identity_redirects?.[id]&&!seen.has(id)){seen.add(id);id=w.runtime.identity_redirects[id]}
     return id??null;
   }
   function project(d,key){
@@ -26,13 +31,10 @@ globalThis.BTData=(()=>{
     const graph=u.graph||{preferences:{},annotations:{}};
     graph.preferences={...copy(d.user_data.preferences||{}),...graph.preferences};
     graph.annotations=graph.annotations||{};
-    for(const [old,id] of Object.entries(w?.runtime?.identity_redirects||{})){
-      if(graph.annotations[old]&&!graph.annotations[resolve(w,id)])graph.annotations[resolve(w,id)]=copy(graph.annotations[old]);
-    }
-    const pets=Object.entries(w?.pets||{}).map(([id,p])=>({
+    const pets=Object.entries(w?.pets||{}).filter(([,p])=>p.lifecycle_state!=='TRACKED').map(([id,p])=>({
       ...p,bt_id:id,runtime_uid:p.current_uid,uid_history:p.uid_history||[],
-      historical:p.historical===true,previous_names:p.previous_name?[p.previous_name]:[],
-      present:p.presence==='present'?true:p.presence==='not_observed'?false:null,
+      historical:p.historical===true||p.lifecycle_state==='ARCHIVED',
+      lifecycle_state:p.lifecycle_state,
       mother_bt_id:resolve(w,p.parents?.mother?.bt_id),father_bt_id:resolve(w,p.parents?.father?.bt_id),
       mother:p.parents?.mother?.label||'',father:p.parents?.father?.label||'',
       species_key:p.species_key||p.actor_class||'Unknown',
@@ -98,7 +100,7 @@ globalThis.BTData=(()=>{
       const latest=await latestDocument();
       if(latest.account.steam_id!==dataset.account_id)throw new Error('Dataset account changed');
       if(!latest.worlds[world])throw new Error('Prospect is no longer active');
-      if(latest.transport?.protocol!==3)throw new Error('Breeding Tool Lua 4.0 required for saving.');
+      if(latest.transport?.protocol!==3)throw new Error('Breeding Tool transport protocol 3 required for saving.');
       const mailbox='BreedingTool.command.json';
       const readMailbox=async()=>{
         try{return JSON.parse(await(await(await directory.getFileHandle(mailbox)).getFile()).text())}
