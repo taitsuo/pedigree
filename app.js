@@ -2307,8 +2307,7 @@ async function readDirectoryJson(handle,requestPermission=false,mode='read'){
   if(permission!=='granted' && requestPermission)permission=await handle.requestPermission({mode});
   if(permission!=='granted')return null;
   if(!selectedDataset)return null;
-  const entry=await handle.getFileHandle(selectedDataset.filename);
-  return (await entry.getFile()).text();
+  return JSON.stringify(await BTData.load(handle,selectedDataset));
 }
 async function readDirectoryCommand(handle){
   if(!handle)return null;
@@ -2471,8 +2470,9 @@ async function connectDirectory(){
     }else{
       const text=await pickJsonFile();
       if(!text)throw new DOMException('Selection cancelled','AbortError');
+      const logical=BTData.snapshot(text);
       selectedDataset=null;localDirectoryHandle=null;availableDatasets=[];updateAccountControls();
-      await applyJsonText(text,'selected file',true);
+      await applyJsonText(JSON.stringify(logical),'coherent snapshot',true);
     }
   }catch(err){
     if(err?.name==='AbortError'){

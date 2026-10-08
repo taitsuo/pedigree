@@ -96,7 +96,7 @@ globalThis.BTData=(()=>{
     if(permission!=='granted')throw new Error('Folder permission required');
     if(!navigator.locks)throw new Error('This browser cannot coordinate saves. Use Chrome or Edge.');
     return navigator.locks.request('breedingtool-mailbox',async()=>{
-      const latestDocument=async()=>validate(JSON.parse(await(await(await directory.getFileHandle(dataset.filename)).getFile()).text()));
+      const latestDocument=async()=>validate((await BTStores.read(directory,dataset)).active);
       const latest=await latestDocument();
       if(latest.account.steam_id!==dataset.account_id)throw new Error('Dataset account changed');
       if(!latest.worlds[world])throw new Error('Prospect is no longer active');
@@ -133,18 +133,9 @@ globalThis.BTData=(()=>{
       return {queued:true,command_id:id};
     });
   }
-  async function discover(directory){
-    const found=[],accounts=new Set();
-    for await(const [filename,entry] of directory.entries()){
-      if(entry.kind!=='file'||!/^BreedingTool_.+\.json$/i.test(filename)||/_Archive\.json$/i.test(filename))continue;
-      let d;
-      try{d=validate(JSON.parse(await(await entry.getFile()).text()))}catch{continue}
-      if(accounts.has(d.account.steam_id))throw new Error('Several datasets belong to the same account');
-      accounts.add(d.account.steam_id);
-      found.push({filename,account_id:d.account.steam_id,label:d.account.steam_user});
-    }
-    return found.sort((a,b)=>a.label.localeCompare(b.label));
-  }
+  async function discover(directory){return BTStores.discover(directory)}
+  async function load(directory,dataset){return validate((await BTStores.read(directory,dataset)).active)}
+  function snapshot(text){return validate(BTStores.fromSnapshot(BTStores.parse(text)).active)}
   async function cancelPending(directory,dataset){
     if(!navigator.locks)throw new Error('This browser cannot coordinate saves');
     return navigator.locks.request('breedingtool-mailbox',async()=>{
@@ -156,5 +147,5 @@ globalThis.BTData=(()=>{
       await directory.removeEntry(name);
     });
   }
-  return {discover,cancelPending,copy,same,validate,project,resolve,diff,overlayPending,submit};
+  return {discover,load,snapshot,cancelPending,copy,same,validate,project,resolve,diff,overlayPending,submit};
 })();

@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V4.0.0</title>
+<title>Breeding Tool — V4.1.0</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V4.0.0</span></h1>
-    <div class="subtitle">Private pedigrees and breeding tools generated locally from BreedingTool_&lt;SteamUser&gt;.json.</div>
+    <h1>Breeding Tool <span class="version">V4.1.0</span></h1>
+    <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
       <button type="button" class="theme-option" data-theme-choice="default" aria-pressed="true">Default</button>
@@ -25,10 +25,10 @@
     <span class="badge" id="speciesBadge">Species: Snow Wolf</span>
     <span class="badge" id="populationBadge">Population: —</span>
     <span class="badge" id="importBadge">JSON: not connected</span>
-    <button class="control primary-control" id="refreshBtn" title="Select the BreedingTool folder containing BreedingTool_&lt;SteamUser&gt;.json, or reload its census">Connect folder</button>
+    <button class="control primary-control" id="refreshBtn" title="Select the BreedingTool folder containing your pet data, or refresh it">Connect folder</button>
     <button class="control" id="disconnectBtn" title="Forget the selected local folder" hidden>Disconnect</button>
     <div class="folder-help">
-      Select the <strong>BreedingTool</strong> folder containing <code>BreedingTool_&lt;SteamUser&gt;.json</code>.
+      Select the <strong>BreedingTool</strong> folder containing your migrated pet data.
       <span class="folder-path">Typical Steam location: <code>...\SteamLibrary\steamapps\common\Icarus\Icarus\Binaries\Win64\ue4ss\Mods\BreedingTool</code></span>
     </div>
   </div>
@@ -133,7 +133,7 @@
       <div class="connect-empty" id="connectEmpty">
         <h2>Connect your local pet census</h2>
         <p>Click <strong>Connect folder</strong>, select the <strong>BreedingTool</strong> mod folder and grant read/write access. The mod creates its census automatically at startup.</p>
-        <p>The browser can access only the folder you authorize. All census and planning data stays on this computer.</p>
+        <p>If folder access is unavailable, select a coherent Advisor snapshot exported while the game is stopped. The browser can access only the folder you authorize. All census and planning data stays on this computer.</p>
       </div>
       <svg id="tree" aria-label="Interactive pet pedigree"></svg>
     </div>
@@ -157,6 +157,7 @@
 <input id="jsonFileFallback" type="file" accept="application/json,.json" hidden>
 
 <script src="breeding-math.js"></script>
+<script src="stores.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>
