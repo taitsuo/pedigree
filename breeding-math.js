@@ -369,17 +369,24 @@ const BreedingMath = (()=>{
   function context(data,{series=null,controlled=Boolean(series),scope='all',generation='all',bound=3,target=20}={}){
     const type=controlled?'controlled_experiment':'global_history';
     let base=controlled?(series?seriesEvents(data,series):[]):data.events;
+    const recordedEvents=base;
+    const exclusions=controlled&&series?series.exclusions||[]:[];
+    const matches=(record,event)=>record.event_id===event.drawId||event.members.some(r=>record.individual_bt_ids?.includes(r.pet.bt_id));
+    const excludedEvents=base.filter(e=>exclusions.some(r=>matches(r,e)));
+    if(exclusions.length)base=base.filter(e=>!excludedEvents.includes(e));
     if(!controlled&&scope.startsWith('pair:'))base=base.filter(e=>e.key===scope.slice(5));
     if(!series&&scope.startsWith('genes:'))base=base.filter(e=>JSON.stringify([e.maternal,e.paternal])===scope.slice(6));
     // Controlled experiments are never silently narrowed by a historical generation filter.
     const events=!controlled&&generation!=='all'?base.filter(e=>String(e.generation)===generation):base;
     const graphEvents=events.filter(reliableEvent),analysis=analyze(events,bound),capture=captureSummary(events,bound),blood=bloodlines(events);
-    const selectedIds=new Set(events.flatMap(e=>e.members.map(r=>r.pet.bt_id)));
+    const selectedIds=new Set(recordedEvents.flatMap(e=>e.members.map(r=>r.pet.bt_id)));
     const related=series?data.rows.filter(r=>!selectedIds.has(r.pet.bt_id)&&!series.baselinePetIds?.includes(r.pet.bt_id)&&
       ((!r.fatherId&&r.motherId===series.femaleId)||(!r.motherId&&r.fatherId===series.maleId))):[];
     const inclusion={type,experiment_id:series?.id||null,scope:controlled?(series?'session:'+series.id:'none'):scope,generation:controlled?'all':generation,
       membership:series?'Explicit experiment record ID and matching recorded parental BT_IDs; contradictory captures retained but excluded; reliable linked members share an event':'All historical offspring, including archived animals; optional explicit pair/genetics/generation filters',
       draw_rule:'Deduplicate reliable twin_source or retained controlled event IDs; never deduplicate by genetics or names',
+      manual_exclusion_rule:'Experiment-local explicit event ID or retained member BT_ID; excludes the whole linked event; global history unchanged',
+      manually_excluded_event_ids:excludedEvents.map(e=>e.drawId),
       model_rule:'Two identified parents with numeric child/parent values for the stat; conflicting or unresolved events excluded',
       histogram_rule:'Reliable event identity and parent IDs; valid child value 0-10; conflicting stat excluded',event_ids:events.map(e=>e.drawId)};
     const models=(items,alternative=false)=>{
@@ -405,6 +412,7 @@ const BreedingMath = (()=>{
       limits:['Absence de twin_source ne prouve pas une naissance unique. Sans identifiant fiable partagé, des jumeaux peuvent rester non reconnus.',
         'Aucune parenté ni date de naissance n’est déduite des noms, des genetics identiques ou de first_seen.',
         'Les talents Genetics sont supposés constants ; ces résultats ne déterminent pas les probabilités vanilla.']};
+    quality.manual_exclusions=exclusions.map(r=>({...r,applied_event_ids:excludedEvents.filter(e=>matches(r,e)).map(e=>e.drawId)}));
     const findings=lessons(events,bound,analysis);
     if(analysis.births&&analysis.births<20)findings.unshift({kind:'Données insuffisantes',text:analysis.births+' tirages analysables : les constats suivants sont descriptifs, sans estimation établie du mécanisme.'});
     const bloodOther=blood.counts.other+blood.counts.sameOther;
@@ -423,8 +431,9 @@ const BreedingMath = (()=>{
       histograms:perStat.map(s=>({stat:s.stat,counts:s.histogram,n:s.histogram_draws})),
       totals:events.map(e=>({event_id:e.drawId,generation:e.generation,...totals(e),reliable:reliableEvent(e),complete:!e.conflict.some(Boolean)&&sum(e.child)!==null})),
       generations:generationSummary(graphEvents,bound),quality,lessons:findings,model_tests:modelTests};
+    if(controlled){results.recorded_capture=captureSummary(recordedEvents,bound);results.manual_exclusions={events:excludedEvents.length,individuals:excludedEvents.reduce((n,e)=>n+e.members.length,0),records:quality.manual_exclusions}}
     results.descriptive=descriptiveResults(data,series,results,graphEvents);
-    return {type,experiment_id:series?.id||null,inclusion,events,graphEvents,results,summary};
+    return {type,experiment_id:series?.id||null,inclusion,events,graphEvents,recordedEvents,excludedEvents,results,summary};
   }
   return Object.freeze({context,captureFlags,reliableEvent,captureSummary,bloodlines,lessons,keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});
 })();
