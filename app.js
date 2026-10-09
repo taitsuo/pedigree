@@ -2362,7 +2362,8 @@ document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
   refreshJson(true);
 });
 let experimentState={version:2,target:20,bound:3,series:null,sessions:[],records:{}};
-let experimentContext=null,experimentData=null,experimentScope='all',experimentGeneration='all',experimentAnalysis=null;
+let experimentContext=null,experimentData=null,experimentScope='all',experimentGeneration='all';
+let experimentMode='controlled';
 let experimentSelection=null,experimentChoosing=false,experimentAdvancedOpen=false,experimentPublishResult=null,experimentPublishing=false;
 const experimentSessions=()=>[...experimentState.sessions,...(experimentState.series?[experimentState.series]:[])];
 function saveExperiment(){
@@ -2372,7 +2373,7 @@ function saveExperiment(){
 function refreshExperiment(){
   const key='breeding-tool-experiment-p1:'+draftKey(BTView.world);
   if(key!==experimentContext){
-    experimentContext=key;experimentScope='all';experimentGeneration='all';experimentSelection=null;experimentChoosing=false;experimentPublishResult=null;
+    experimentContext=key;experimentMode='controlled';experimentScope='all';experimentGeneration='all';experimentSelection=null;experimentChoosing=false;experimentPublishResult=null;
     experimentState={version:2,target:20,bound:3,series:null,sessions:[],records:{}};
     try{
       const saved=JSON.parse(localStorage.getItem(key));
@@ -2380,7 +2381,7 @@ function refreshExperiment(){
       if(Number.isInteger(saved?.bound)&&saved.bound>=0&&saved.bound<=10)experimentState.bound=saved.bound;
       if(saved?.series&&stablePetId(saved.series.femaleId)&&stablePetId(saved.series.maleId)
         &&Array.isArray(saved.series.baselineIds)&&Array.isArray(saved.series.baselineDraws))experimentState.series=saved.series;
-      if(saved?.version===2){experimentState.sessions=saved.sessions||[];experimentState.records=saved.records||{}}
+      if(saved?.version===2){experimentState.sessions=saved.sessions||[];experimentState.records=saved.records||{};experimentState.selectedExperimentId=saved.selectedExperimentId||null}
     }catch{}
   }
   const before=JSON.stringify(experimentState),state=experimentState;
@@ -2408,7 +2409,8 @@ function refreshExperiment(){
     }
   }
   experimentData=BreedingMath.collect(currentPayload.pets,normalizeSpeciesKey,stablePetId,state.records);
-  experimentAnalysis=BreedingMath.analyze(experimentData.events,state.bound);
+  const sessions=experimentSessions();
+  if(!sessions.some(s=>s.id===state.selectedExperimentId))state.selectedExperimentId=state.series?.id||sessions.at(-1)?.id||null;
   if(before!==JSON.stringify(state))saveExperiment();
 }
 function startExperiment(pair){
@@ -2416,10 +2418,10 @@ function startExperiment(pair){
   const state=experimentState,key=BreedingMath.pairKey(pair.female.bt_id,pair.male.bt_id);
   if(state.series)state.sessions.push(state.series);
   const known=experimentData.rows.filter(r=>r.key===key);
-  state.series={id:'P3-'+Date.now(),status:'running',target:state.target,bound:state.bound,femaleId:pair.female.bt_id,maleId:pair.male.bt_id,
+  state.series={id:'P4-'+Date.now(),status:'running',target:state.target,bound:state.bound,femaleId:pair.female.bt_id,maleId:pair.male.bt_id,
     reason:pair.reason,started:new Date().toISOString(),baselinePetIds:experimentData.pets.map(p=>p.bt_id),
     baselineIds:known.map(r=>r.pet.bt_id),baselineDraws:[...new Set(known.map(r=>r.drawId))]};
-  experimentChoosing=false;experimentScope='session:'+state.series.id;saveExperiment();refreshExperiment();renderExperiment();
+  experimentChoosing=false;experimentMode='controlled';state.selectedExperimentId=state.series.id;saveExperiment();refreshExperiment();renderExperiment();
 }
 const experimentNumber=(v,digits=1)=>BreedingMath.numeric(v)?Number(v.toFixed(digits)).toString():'Inconnu';
 const experimentPercent=v=>v===null||v===undefined?'Indéterminé':(100*v).toFixed(1)+' %';
@@ -2443,8 +2445,8 @@ function experimentParentHtml(p,sex,genes,expectedId=null){
   return '<div class="experiment-warning"><strong>Create with Rada: '+sex+' '+(full?'Full '+genes[0]:esc(experimentGenes(genes)))+'</strong><p>Animal à créer, pas encore présent. Nom, BT_ID, parents et bloodline inconnus ; genetics demandées : '+esc(experimentGenes(genes))+' ; total demandé : '+experimentNumber(BreedingMath.sum(genes))+'. Attendre son apparition comme adulte actif dans le JSON.</p></div>';
 }
 function experimentTable(headers,rows){return '<div class="experiment-table-scroll"><table class="experiment-table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(cells=>'<tr>'+cells.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'}
-function experimentHistogram(events,i){
-  const bins=BreedingMath.histogram(events,i),max=Math.max(1,...bins),n=bins.reduce((a,b)=>a+b,0);
+function experimentHistogram(bins,i){
+  const max=Math.max(1,...bins),n=bins.reduce((a,b)=>a+b,0);
   return '<div class="experiment-chart"><h3>'+BreedingMath.names[i]+' ('+BreedingMath.keys[i]+') — '+n+' tirages</h3><div class="experiment-histogram">'+
     bins.map((count,v)=>'<div class="experiment-bin" title="'+count+' tirages de valeur '+v+'"><span>'+count+'</span><div class="experiment-bar" style="height:'+Math.round(100*count/max)+'px"></div><span>'+v+'</span></div>').join('')+'</div></div>';
 }
@@ -2463,66 +2465,63 @@ function experimentEvaluationHtml(analysis,bound){
       s.compatibility===null?'Indéterminé':s.compatibility.toFixed(1)+' %',
       (s.counts.neither?'Hypothèse contredite':s.births<20?'Données insuffisantes':'Compatible à ce stade')+experimentEstimateHtml(s.estimate,bound)]));
 }
-function experimentSumGraph(events,generations){
+function experimentSumGraph(totals,generations){
   const known=generations.filter(g=>g.generation!==null),xs=known.map(g=>g.generation);
   if(!xs.length)return '<p>Graphique indisponible : générations inconnues.</p>';
-  const maxG=Math.max(1,...xs),x=g=>45+g/maxG*610,y=total=>210-total/70*170;
-  const points=events.filter(e=>e.generation!==null&&!e.twinIssue&&!e.conflict.some(Boolean)&&BreedingMath.sum(e.child)!==null);
+  const minG=Math.min(...xs),maxG=Math.max(...xs),x=g=>xs.length===1?350:45+(g-minG)/(maxG-minG)*610,y=total=>210-total/70*170;
+  const points=totals.filter(e=>e.generation!==null&&e.reliable&&e.complete&&e.child!==null);
   const means=known.filter(g=>g.mean!==null);
   return '<svg class="experiment-sum-chart" viewBox="0 0 700 250" role="img" aria-label="Totaux individuels par génération et moyenne"><path d="M45 30 V210 H675" fill="none" stroke="currentColor"/>'+
     [0,35,70].map(v=>'<text x="5" y="'+(y(v)+4)+'">'+v+'</text>').join('')+
-    points.map(e=>'<circle cx="'+x(e.generation)+'" cy="'+y(BreedingMath.sum(e.child))+'" r="4"><title>'+esc(e.pet.bt_id)+' · G'+e.generation+' · Total '+BreedingMath.sum(e.child)+'</title></circle>').join('')+
+    points.map(e=>'<circle cx="'+x(e.generation)+'" cy="'+y(e.child)+'" r="4"><title>'+esc(e.event_id)+' · G'+e.generation+' · Total '+e.child+'</title></circle>').join('')+
     '<polyline points="'+means.map(g=>x(g.generation)+','+y(g.mean)).join(' ')+'" fill="none" stroke="var(--female)" stroke-width="2"/>'+
     known.map(g=>'<text x="'+x(g.generation)+'" y="238" text-anchor="middle">G'+g.generation+'</text>').join('')+'</svg><p>Points : un total par naissance indépendante ; ligne : moyenne descriptive. Une hausse peut provenir de la sélection des reproducteurs, sans prouver une mutation positive ou un effet de génération.</p>';
 }
-function experimentFilteredEvents(){
-  let events=experimentData.events;
-  if(experimentScope.startsWith('session:'))events=events.filter(e=>e.sessionIds.includes(experimentScope.slice(8)));
-  if(experimentScope.startsWith('pair:'))events=events.filter(e=>e.key===experimentScope.slice(5));
-  if(experimentScope.startsWith('genes:'))events=events.filter(e=>JSON.stringify([e.maternal,e.paternal])===experimentScope.slice(6));
-  if(experimentGeneration!=='all')events=events.filter(e=>String(e.generation)===experimentGeneration);
-  return events;
+function experimentViewContext(){
+  const series=experimentSessions().find(s=>s.id===experimentState.selectedExperimentId)||null;
+  const controlled=experimentMode==='controlled';
+  return BreedingMath.context(experimentData,{series:controlled?series:null,controlled,
+    scope:experimentScope,generation:experimentGeneration,
+    bound:controlled?(series?.analysisBound??experimentState.bound):experimentState.bound,
+    target:series?.target??experimentState.target});
 }
 function renderExperiment(){
   advisorWrap.style.display='none';breedingTableWrap.style.display='none';wrap.style.display='none';
   setViewHeading('Experiment — laboratoire génétique','Snow Wolf · V/F/P/R/T/A/I · comprendre la transmission, sans objectif de score.');countText.textContent='';
   if(!experimentData){experimentWrap.innerHTML='<p>Connecter le census et sélectionner un compte et un monde.</p>';return}
-  const data=experimentData,state=experimentState,series=state.series,bound=state.bound;
-  const currentEvents=series?BreedingMath.seriesEvents(data,series):[],currentCounts=BreedingMath.captureSummary(currentEvents,bound);
-  const progress=currentCounts.analysable,running=Boolean(series&&series.status!=='ended'),complete=Boolean(series&&progress>=state.target);
-  const next=BreedingMath.recommend(data,state,experimentAnalysis);
-  const current=series?{female:data.breeders.find(p=>p.bt_id===series.femaleId),male:data.breeders.find(p=>p.bt_id===series.maleId),maternal:BreedingMath.genetics(data.byId.get(series.femaleId)),paternal:BreedingMath.genetics(data.byId.get(series.maleId)),reason:series.reason}:null;
+  const data=experimentData,state=experimentState,controlled=experimentMode==='controlled';
+  const ctx=experimentViewContext(),series=controlled?experimentSessions().find(s=>s.id===ctx.experiment_id):null;
+  const {events,graphEvents}=ctx,{analysis,capture:counts,generations,bloodlines:blood}=ctx.results;
+  const bound=series?.analysisBound??state.bound,target=series?.target??state.target;
+  const active=Boolean(series&&series.id===state.series?.id),running=Boolean(active&&series.status!=='ended'),progress=counts.analysable,complete=Boolean(series&&progress>=target);
+  const label=controlled?(series?'Expérience '+series.id:'Expérience contrôlée — aucune série'):'Historique global';
+  const next=controlled?BreedingMath.recommend({...data,events,rows:events.flatMap(e=>e.members)},{...state,series,target,bound},analysis):null;
+  const current=series?{female:data.breeders.find(p=>p.bt_id===series.femaleId),male:data.breeders.find(p=>p.bt_id===series.maleId),maternal:BreedingMath.genetics(data.byId.get(series.femaleId)),paternal:BreedingMath.genetics(data.byId.get(series.maleId))}:null;
   if(!experimentSelection&&next)experimentSelection={femaleId:next.female?.bt_id||'',maleId:next.male?.bt_id||'',reason:next.reason};
   const selection=experimentSelection||{},pair={female:data.breeders.find(p=>p.bt_id===selection.femaleId),male:data.breeders.find(p=>p.bt_id===selection.maleId),reason:selection.reason||'Couple choisi pour étudier ses sept stats réelles.'};
-  const startReason=running?'Terminer la série en cours avant de démarrer un autre couple.':!pair.female||!pair.male?'Choisir deux reproducteurs adultes actifs, Female et Male, présents dans le JSON.':'';
-  const sendReason=!running?'Démarrer une expérience avant d’envoyer son couple.':!current.female||!current.male?'Les deux reproducteurs doivent être adultes actifs dans le JSON.':!localDirectoryHandle||!selectedDataset?'Connecter le dossier BreedingTool et sélectionner le compte.':BTView.saving?'Une sauvegarde est déjà en cours.':'';
-  const events=experimentFilteredEvents(),analysis=BreedingMath.analyze(events,bound),counts=BreedingMath.captureSummary(events,bound),graphEvents=events.filter(BreedingMath.reliableEvent),generations=BreedingMath.generationSummary(graphEvents,bound),blood=BreedingMath.bloodlines(events);
-  const possibleCaptures=series?data.rows.filter(r=>r.pet.mother_bt_id===series.femaleId&&!r.pet.father_bt_id&&(!series.baselinePetIds||!series.baselinePetIds.includes(r.pet.bt_id))):[];
+  const startReason=state.series&&state.series.status!=='ended'?'Terminer la série en cours '+state.series.id+' avant de démarrer un autre couple.':!pair.female||!pair.male?'Choisir deux reproducteurs adultes actifs, Female et Male, présents dans le JSON.':'';
+  const sendReason=!running?'Seule l’expérience actuellement en cours peut envoyer son couple.':!current.female||!current.male?'Les deux reproducteurs doivent être adultes actifs dans le JSON.':!localDirectoryHandle||!selectedDataset?'Connecter le dossier BreedingTool et sélectionner le compte.':BTView.saving?'Une sauvegarde est déjà en cours.':'';
   const pairOptions=[...new Map(data.rows.map(r=>[r.key,r])).values()];
   const configurations=[...new Map(data.events.filter(e=>e.maternal.some(BreedingMath.numeric)&&e.paternal.some(BreedingMath.numeric)).map(e=>[JSON.stringify([e.maternal,e.paternal]),e])).entries()];
-  const scopeOptions=[['all','Historique global'],...experimentSessions().map(s=>['session:'+s.id,'Expérience '+s.id+' · '+s.femaleId+' × '+s.maleId]),
-    ...pairOptions.map(r=>['pair:'+r.key,'Couple '+(r.pet.mother_bt_id||'?')+' × '+(r.pet.father_bt_id||'?')]),
-    ...configurations.map(([key,e])=>['genes:'+key,'Configuration ♀ '+experimentGenes(e.maternal)+' × ♂ '+experimentGenes(e.paternal)])];
-  const selectedOptions=scopeOptions.map(([value,label])=>'<option value="'+esc(value)+'"'+(value===experimentScope?' selected':'')+'>'+esc(label)+'</option>').join('');
+  const scopeOptions=[['all','Tout l’historique'],...pairOptions.map(r=>['pair:'+r.key,'Couple '+(r.motherId||'?')+' × '+(r.fatherId||'?')]),...configurations.map(([key,e])=>['genes:'+key,'Configuration ♀ '+experimentGenes(e.maternal)+' × ♂ '+experimentGenes(e.paternal)])];
+  const selectedOptions=scopeOptions.map(([value,text])=>'<option value="'+esc(value)+'"'+(value===experimentScope?' selected':'')+'>'+esc(text)+'</option>').join('');
   const generationOptions=[...new Set(data.events.map(e=>e.generation))].sort((a,b)=>a===null?1:b===null?-1:a-b);
   const rowIdentity=e=>experimentPetHtml(e.pet,e.child)+'<span class="small">'+(e.generation===null?'Génération inconnue':'G'+e.generation)+' · tirage '+esc(e.drawId)+'</span>';
-
-  const action=(id,label,reason)=>'<span class="experiment-action"><button class="control" id="'+id+'"'+(reason?' disabled aria-describedby="'+id+'Reason" title="'+esc(reason)+'"':'')+'>'+label+'</button>'+(reason?'<small id="'+id+'Reason">'+esc(reason)+'</small>':'')+'</span>';
+  const action=(id,text,reason)=>'<span class="experiment-action"><button class="control" id="'+id+'"'+(reason?' disabled aria-describedby="'+id+'Reason" title="'+esc(reason)+'"':'')+'>'+text+'</button>'+(reason?'<small id="'+id+'Reason">'+esc(reason)+'</small>':'')+'</span>';
   const breederOptions=sex=>'<option value="">Sélectionner</option>'+data.breeders.filter(p=>p.sex===sex).map(p=>'<option value="'+esc(p.bt_id)+'"'+(p.bt_id===(sex==='Female'?selection.femaleId:selection.maleId)?' selected':'')+'>'+esc(canonicalName(p.name))+' — '+sex+' — '+esc(p.bt_id)+' — '+esc(experimentGenes(BreedingMath.genetics(p)))+'</option>').join('');
   const bloodLabels={father:'Père uniquement (parents différents)',mother:'Mère uniquement (parents différents)',other:'Différente des deux parents',same:'Parents identiques : même Bloodline héritée (origine ambiguë)',sameOther:'Parents identiques : Bloodline différente'};
   experimentWrap.innerHTML=
-    '<section class="experiment-section"><h2>Expérience en cours</h2><p>Choisir un couple → démarrer le suivi → envoyer le couple au Breeding Panel. Chaque action est explicite ; aucune reproduction automatique.</p>'+
-    (series?'<div class="experiment-metrics"><div><strong>'+ (running?'En cours':'Terminée')+'</strong><span>'+esc(series.id)+'</span></div><div><strong>'+progress+' / '+state.target+'</strong><span>tirages génétiques analysables</span></div><div><strong>'+currentCounts.individuals+'</strong><span>individus attribués à la série</span></div><div><strong>'+currentCounts.twinGroups+'</strong><span>groupes gémellaires confirmés</span></div></div><progress aria-label="Progression des tirages analysables" max="'+state.target+'" value="'+Math.min(progress,state.target)+'"></progress>'+(complete&&running?'<p><strong>Objectif atteint. Vous pouvez terminer cette série ou poursuivre pour augmenter l’échantillon.</strong></p>':'')+'<div class="experiment-pair">'+experimentParentHtml(data.byId.get(series.femaleId),'Female',current.maternal,series.femaleId)+experimentParentHtml(data.byId.get(series.maleId),'Male',current.paternal,series.maleId)+'</div>'+(series.legacy?'<p>Série V8/V2 P1 conservée, avec ses observations et sa progression.</p>':''):'<p>Aucune expérience démarrée. Les descendants déjà présents restent dans l’historique, sans compter dans la progression d’une nouvelle série.</p>')+
-    (possibleCaptures.length?'<p class="experiment-warning">'+possibleCaptures.length+' captures avec cette mère mais sans père identifié : individus visibles dans l’historique global, non attribués à cette série. Un second jumeau est possible, sans être confirmé. Vérifier les BT_ID dans les observations avancées.</p>':'')+
-    '<div class="experiment-controls"><label>Objectif <input class="control" id="experimentTarget" type="number" min="1" step="1" value="'+state.target+'"> tirages</label></div><div class="experiment-actions">'+action('experimentChoose',series?'Changer de couple':'Choisir le couple','')+action('experimentEnd','Terminer l’expérience',!running?'Aucune expérience en cours.':'')+action('experimentSend','Envoyer le couple au Breeding Panel',sendReason)+'</div><span id="experimentSendState" role="status"></span>'+
-    '<div class="experiment-card" id="experimentChooser"'+(experimentChoosing||!series?'':' hidden')+'><h3>Choisir et démarrer</h3><p>La sélection ne démarre pas de suivi et n’envoie rien au jeu.</p><div class="experiment-controls"><label>Femelle <select class="control" id="experimentFemale">'+breederOptions('Female')+'</select></label><label>Mâle <select class="control" id="experimentMale">'+breederOptions('Male')+'</select></label></div><div class="experiment-pair">'+(pair.female?experimentPetHtml(pair.female):'<p>Femelle à sélectionner.</p>')+(pair.male?experimentPetHtml(pair.male):'<p>Mâle à sélectionner.</p>')+'</div>'+action('experimentStart','Démarrer l’expérience',startReason)+'</div></section>'+
-    '<section class="experiment-section"><h2>Résultats étudiés</h2><div class="experiment-controls"><label>Périmètre <select class="control" id="experimentScope">'+selectedOptions+'</select></label><label>Génération <select class="control" id="experimentGeneration"><option value="all">Toutes</option>'+generationOptions.map(g=>'<option value="'+g+'"'+(String(g)===experimentGeneration?' selected':'')+'>'+(g===null?'Génération inconnue':'G'+g)+'</option>').join('')+'</select></label></div><p>'+counts.individuals+' individus enregistrés · '+counts.draws+' tirages à parenté complète · '+counts.analysable+' tirages analysables · '+counts.twinGroups+' groupes gémellaires confirmés · '+counts.uncertain+' individus à vérifier. Les captures incertaines restent dans l’historique, sans devenir des tirages indépendants présumés.</p></section>'+
-    '<section class="experiment-section"><h2>Ce que nous avons appris</h2><div class="experiment-lessons">'+BreedingMath.lessons(events,bound,analysis).map(l=>'<article class="experiment-card"><h3>'+esc(l.kind)+'</h3><p>'+esc(l.text)+'</p></article>').join('')+'</div><p>Observations propres à cette configuration de talents Genetics, supposée constante. Elles ne déterminent pas les probabilités vanilla.</p></section>'+
-    '<section class="experiment-section"><h2>Prochaine expérience</h2>'+(running&&!complete?'<p>Continuer le couple actuel : '+progress+' / '+state.target+' tirages. Un échantillon plus grand aide à vérifier si les tendances persistent ; il ne confirme pas à lui seul un modèle.</p><h3>Ensuite, test envisagé</h3>':'')+'<div class="experiment-pair">'+experimentParentHtml(next.female,'Female',next.maternal)+experimentParentHtml(next.male,'Male',next.paternal)+'</div><p>'+esc(next.reason)+'</p>'+action('experimentNext','Préparer ce croisement',!next.female||!next.male?'Créer les reproducteurs indiqués avec Rada, puis attendre leur apparition dans le JSON.':'')+'</section>'+
-    '<section class="experiment-section"><h2>Total des genetics au fil des générations</h2><p>Somme V/F/P/R/T/A/I, de 0 à 70. Un point représente un tirage avec sept valeurs connues ; la ligne montre la moyenne par génération.</p>'+experimentSumGraph(graphEvents,generations)+'</section>'+
-    '<section class="experiment-section"><h2>Distribution des sept genetics</h2><p>Axe horizontal : valeur de 0 à 10. Axe vertical et nombres au-dessus des barres : effectifs réels, un tirage par groupe gémellaire lié. Les captures à parenté incertaine et les stats gémellaires contradictoires sont exclues.</p><div class="experiment-charts">'+BreedingMath.keys.map((_,i)=>experimentHistogram(graphEvents,i)).join('')+'</div></section>'+
-    '<section class="experiment-section"><h2>Héritage des Bloodlines</h2><p>'+blood.n+' tirages exploitables · '+blood.excluded+' événements non exploitables (parenté, Bloodline manquante ou conflit). Fréquences descriptives sur les tirages exploitables ; aucune règle d’héritage n’est présupposée.</p>'+experimentTable(['Observation','Effectif','Fréquence observée'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'</section>'+
-    '<section class="experiment-section"><h2>Partager les résultats</h2><p>Publication explicite de l’historique complet de ce monde, des expériences, des captures incertaines et des calculs. Destination privée : taitsuo/chatgpt-icarus · main · research/genetics/latest.json.</p><button class="control" id="experimentPublish"'+(experimentPublishing?' disabled title="Publication en cours"':'')+'>Publier sur GitHub</button><p id="experimentPublishState" role="status"></p></section>'+
+    '<section class="experiment-context '+(controlled?'is-controlled':'is-history')+'"><div class="experiment-actions"><button class="control" id="experimentControlled" aria-pressed="'+controlled+'">Expérience contrôlée</button><button class="control" id="experimentHistory" aria-pressed="'+!controlled+'">Historique global</button></div><h2 id="experimentContextTitle">'+esc(label)+'</h2>'+
+    (controlled?'<label>Expérience sélectionnée <select class="control" id="experimentSelected"'+(experimentSessions().length?'':' disabled')+'>'+experimentSessions().map(s=>'<option value="'+esc(s.id)+'"'+(s.id===state.selectedExperimentId?' selected':'')+'>'+esc(s.id+' · '+(data.byId.get(s.femaleId)?.name||s.femaleId)+' × '+(data.byId.get(s.maleId)?.name||s.maleId))+'</option>').join('')+'</select></label><p>Seuls les tirages enregistrés pour cet identifiant entrent dans les résultats. Les naissances antérieures restent dans l’historique.</p>':'<p>Analyse historique indépendante. Ces résultats ne sont pas ceux de l’expérience sélectionnée ; celle-ci reste la référence primaire de l’export.</p><div class="experiment-controls"><label>Croisements <select class="control" id="experimentScope">'+selectedOptions+'</select></label><label>Génération <select class="control" id="experimentGeneration"><option value="all">Toutes</option>'+generationOptions.map(g=>'<option value="'+g+'"'+(String(g)===experimentGeneration?' selected':'')+'>'+(g===null?'Génération inconnue':'G'+g)+'</option>').join('')+'</select></label></div>')+'</section>'+
+    (controlled?'<section class="experiment-section"><h2>Présentation de l’expérience</h2><p>Snow Wolf · '+(series?(running?'En cours':'Terminée'):'Aucune expérience démarrée')+'</p>'+(series?'<div class="experiment-pair">'+experimentParentHtml(data.byId.get(series.femaleId),'Female',current.maternal,series.femaleId)+experimentParentHtml(data.byId.get(series.maleId),'Male',current.paternal,series.maleId)+'</div><p><strong>Progression : '+progress+' / '+target+' tirages analysables</strong></p><progress aria-label="Progression de l’expérience sélectionnée" max="'+target+'" value="'+Math.min(progress,target)+'"></progress>'+(complete&&running?'<p>Objectif atteint. Terminer la série ou poursuivre explicitement pour augmenter l’échantillon.</p>':'')+(series.legacy?'<p>Série V8/V2 P1 conservée.</p>':''):'<p>Choisir un couple puis démarrer le suivi. Les naissances déjà connues sont exclues de sa progression.</p>')+
+    '<div class="experiment-actions">'+action('experimentChoose',series?'Préparer un autre couple':'Choisir le couple','')+action('experimentEnd','Terminer l’expérience',!running?'Cette expérience n’est pas la série actuellement en cours.':'')+action('experimentSend','Envoyer le couple au Breeding Panel',sendReason)+'</div><span id="experimentSendState" role="status"></span><div class="experiment-card" id="experimentChooser"'+(experimentChoosing||!series?'':' hidden')+'><h3>Choisir et démarrer</h3><p>La sélection, le démarrage et l’envoi au jeu sont trois actions distinctes.</p><div class="experiment-controls"><label>Femelle <select class="control" id="experimentFemale">'+breederOptions('Female')+'</select></label><label>Mâle <select class="control" id="experimentMale">'+breederOptions('Male')+'</select></label><label>Objectif de la nouvelle série <input class="control" id="experimentNewTarget" type="number" min="1" step="1" value="'+state.target+'"></label></div><div class="experiment-pair">'+(pair.female?experimentPetHtml(pair.female):'<p>Femelle à sélectionner.</p>')+(pair.male?experimentPetHtml(pair.male):'<p>Mâle à sélectionner.</p>')+'</div>'+action('experimentStart','Démarrer l’expérience',startReason)+'</div></section>':'')+
+    '<section class="experiment-section"><h2>Échantillon étudié — '+esc(label)+'</h2><div class="experiment-metrics"><div><strong>'+counts.individuals+'</strong><span>individus descendants observés</span></div><div><strong>'+counts.events+'</strong><span>événements capturés après regroupement</span></div><div><strong>'+counts.draws+'</strong><span>tirages distincts exploitables selon les liens connus</span></div><div><strong>'+counts.linkedTwins+'</strong><span>individus jumeaux supplémentaires reliés ('+counts.twinGroups+' groupes)</span></div><div><strong>'+counts.uncertainEvents+'</strong><span>événements incertains exclus</span></div></div><p>'+counts.analysable+' tirages fournissent au moins une stat analysable. Un jumeau sans lien explicite peut rester non reconnu : '+counts.linkedTwins+' jumeaux reliés ne prouve pas l’absence d’autres jumeaux.</p>'+(ctx.results.quality.possible_unassigned.length?'<p class="experiment-warning">'+ctx.results.quality.possible_unassigned.length+' individus à association possible mais non démontrée, hors de cet échantillon. Ils sont identifiés dans les analyses avancées.</p>':'')+'</section>'+
+    '<section class="experiment-section"><h2>Ce que nous avons appris — '+esc(label)+'</h2><div class="experiment-lessons">'+ctx.summary.findings.map(l=>'<article class="experiment-card"><h3>'+esc(l.kind)+'</h3><p>'+esc(l.text)+'</p></article>').join('')+'</div><p>Talents Genetics supposés constants ; ces constats ne déterminent pas les probabilités vanilla.</p></section>'+
+    (controlled?'<section class="experiment-section"><h2>Prochaine expérience</h2>'+(running&&!complete?'<p>Continuer ce couple : '+progress+' / '+target+' tirages analysables. Compléter l’échantillon ne confirme pas à lui seul un modèle.</p>':'')+'<div class="experiment-pair">'+experimentParentHtml(next.female,'Female',next.maternal)+experimentParentHtml(next.male,'Male',next.paternal)+'</div><p>'+esc(next.reason)+'</p>'+action('experimentNext','Préparer ce croisement',!next.female||!next.male?'Créer les reproducteurs indiqués avec Rada et attendre leur apparition dans le JSON.':'')+'</section>':'')+
+    '<section class="experiment-section"><h2>Total génétique par génération — '+esc(label)+'</h2><p>Somme V/F/P/R/T/A/I de 0 à 70. Points : un total complet par tirage ; ligne : moyenne descriptive.</p>'+(controlled&&generations.filter(g=>g.generation!==null).length===1?'<p>Cette expérience ne couvre qu’une génération. L’évolution entre générations ne peut pas encore être étudiée.</p>':'')+experimentSumGraph(ctx.results.totals,generations)+'</section>'+
+    '<section class="experiment-section"><h2>Sept distributions — '+esc(label)+'</h2><p>Valeurs de 0 à 10 ; nombres au-dessus des barres : effectifs réels. Un groupe gémellaire fiable compte une fois. Chaque histogramme affiche son propre nombre de valeurs disponibles.</p><div class="experiment-charts" id="experimentMainHistograms">'+BreedingMath.keys.map((_,i)=>experimentHistogram(ctx.results.histograms[i].counts,i)).join('')+'</div></section>'+
+    '<section class="experiment-section"><h2>Bloodlines — '+esc(label)+'</h2><p>'+blood.n+' tirages exploitables et '+blood.excluded+' événements exclus. Aucun héritage limité aux parents n’est présupposé.</p>'+experimentTable(['Observation','Effectif','Fréquence observée'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'</section>'+
+    '<section class="experiment-section"><h2>Partager les résultats</h2><p>Publier l’expérience primaire sélectionnée, toutes les expériences conservées, l’historique indépendant et les observations originales. Ouvrir l’historique ne remplace pas l’expérience primaire. Destination privée : research/genetics/latest.json.</p><button class="control" id="experimentPublish"'+(experimentPublishing?' disabled title="Publication en cours"':'')+'>Publier sur GitHub</button><p id="experimentPublishState" role="status"></p></section>'+
     '<details id="experimentAdvanced" class="experiment-advanced"'+(experimentAdvancedOpen?' open':'')+'><summary>Analyses avancées et observations individuelles</summary><p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
     '<section class="experiment-section"><h2>Inheritance Analysis</h2><p>Deux deltas sont conservés. La compatibilité tient compte du plafonnement 0–10 : un delta affiché nul peut cacher plusieurs variations latentes. Les données parentales manquantes restent inconnues.</p>'+
     events.map(e=>'<details class="experiment-birth"><summary>'+esc(canonicalName(e.pet.name))+' — '+esc(e.pet.sex||'Inconnu')+' — '+esc(e.pet.bt_id)+' · '+(e.generation===null?'Génération inconnue':'G'+e.generation)+'</summary>'+rowIdentity(e)+experimentTable(['Stat','Père','Mère','Enfant','DeltaFather','DeltaMother','Classification ±'+bound],BreedingMath.keys.map((key,i)=>{
@@ -2533,32 +2532,34 @@ function renderExperiment(){
     '<h3>Comparaison et estimation globale</h3><p>'+analysis.n+' observations de stats / '+analysis.births+' naissances ; père seul '+analysis.counts.father+', mère seule '+analysis.counts.mother+', ambiguës '+analysis.counts.both+', contradictions '+analysis.counts.neither+', non analysables '+analysis.counts.unknown+'. Compatibilité observée : '+(analysis.compatibility===null?'Indéterminée':analysis.compatibility.toFixed(1)+' %')+'.</p><p>'+esc(analysis.commonReason)+'</p>'+experimentEstimateHtml(analysis.common,bound)+
     '<p>Le contrôle entre stats compare des valeurs appariées d’une même naissance avec mêmes valeurs parentales, au moins 40 naissances par paire ; il reste exploratoire et peut manquer de puissance. Le calcul commun ne transforme jamais sept stats en sept naissances indépendantes ; aucune précision statistique fondée sur cette indépendance n’est annoncée.</p><h3>Choix parental commun à plusieurs stats ?</h3><p>Origines : seuls résultats non ambigus (sélection potentiellement biaisée). Résidus : valeurs enfants centrées par combinaison parentale, sans attribuer leur origine. Ces corrélations descriptives ne démontrent ni un tirage parental commun ni une variation commune.</p>'+
     experimentTable(['Stats','Naissances non ambiguës','Même origine possible','Corrélation des origines φ','Naissances analysables','Corrélation des résidus'],analysis.correlations.map(c=>[BreedingMath.keys[c.i]+' / '+BreedingMath.keys[c.j],c.n,c.agree+' / '+c.n,c.phi===null?'Indéterminée':c.phi.toFixed(2),c.residualN,c.residual===null?'Indéterminée':c.residual.toFixed(2)]))+'</section>'+
-    '<section class="experiment-section"><h2>Generations</h2><p>G0 : animaux sans parenté déclarée (fondateurs selon le census). Deux générations parentales connues : 1 + maximum. Lien absent, parent manquant ou cycle : Génération inconnue. '+data.pets.filter(p=>data.generations.get(p.bt_id)===0).length+' fondateurs recensés. Les différences sont descriptives : la sélection et les configurations parentales peuvent les expliquer.</p>'+
+    '<section class="experiment-section"><h2>Generations</h2><p>G0 : animaux sans parenté déclarée (fondateurs selon le census). Deux générations parentales connues : 1 + maximum. Lien absent, parent manquant ou cycle : Génération inconnue. Les générations affichées appartiennent exclusivement au périmètre sélectionné. Les différences sont descriptives : la sélection et les configurations parentales peuvent les expliquer.</p>'+
     experimentTable(['Génération','Naissances indépendantes','Total moyen / effectif complet','Écart à la génération précédente connue','Compatibilité observée A'],generations.map((g,i)=>{
       const previous=generations.find(p=>g.generation!==null&&p.generation===g.generation-1);
       return [g.generation===null?'Génération inconnue':'G'+g.generation,g.events,experimentNumber(g.mean)+' / '+g.totalCount,previous&&previous.mean!==null&&g.mean!==null?experimentNumber(g.mean-previous.mean):'Inconnu',g.analysis.compatibility===null?'Indéterminée':g.analysis.compatibility.toFixed(1)+' %'];
-    }))+generations.map(g=>'<details><summary>'+(g.generation===null?'Génération inconnue':'G'+g.generation)+' — distributions et estimations</summary><div class="experiment-charts">'+BreedingMath.keys.map((_,i)=>experimentHistogram(events.filter(e=>e.generation===g.generation),i)).join('')+'</div>'+experimentEvaluationHtml(g.analysis,bound)+'<p>'+esc(g.analysis.commonReason)+'</p>'+experimentEstimateHtml(g.analysis.common,bound)+'</details>').join('')+'</section>'+
-    '<section class="experiment-section"><h2>Observations</h2><p>Archives et morts conservés. Les BT_ID complets relient les animaux ; noms et bloodlines ne servent jamais de clé. '+data.rows.filter(r=>r.childChanged).length+' individus ont des genetics actuelles différentes des valeurs déjà observées : les premières valeurs mémorisées sont conservées.</p>'+
+    }))+generations.map(g=>'<details><summary>'+(g.generation===null?'Génération inconnue':'G'+g.generation)+' — distributions et estimations</summary><div class="experiment-charts">'+BreedingMath.keys.map((_,i)=>experimentHistogram(g.histograms[i],i)).join('')+'</div>'+experimentEvaluationHtml(g.analysis,bound)+'<p>'+esc(g.analysis.commonReason)+'</p>'+experimentEstimateHtml(g.analysis.common,bound)+'</details>').join('')+'</section>'+
+    '<section class="experiment-section"><h2>Observations</h2><p>Archives et morts conservés. Les BT_ID complets relient les animaux ; noms et bloodlines ne servent jamais de clé. '+events.flatMap(e=>e.members).filter(r=>r.childChanged).length+' individus ont des genetics actuelles différentes des valeurs déjà observées : les premières valeurs mémorisées sont conservées.</p>'+
     experimentTable(['Descendant — fiche complète','État / génération','Événement indépendant / série','Valeurs parentales utilisées'],events.flatMap(e=>e.members.map(r=>[
       experimentPetHtml(r.pet,r.child),esc(r.pet.lifecycle_state)+' / '+(r.generation===null?'Génération inconnue':'G'+r.generation),esc(e.drawId)+'<br>'+esc(r.sessionId||'Hors expérience')+'<br>'+(r.twinIssue?'Lien twin_source non fiable, exclu des estimations':e.members.length>1?'Jumeaux : un seul événement':'Événement distinct'),
-      BreedingMath.captureFlags(r).map(esc).join('<br>')+'<br>Père : '+esc(experimentGenes(r.paternal))+'<br>Mère : '+esc(experimentGenes(r.maternal))+(e.conflict.some(Boolean)?'<br><span class="experiment-warning">Stats gémellaires contradictoires exclues.</span>':'')
-    ])))+'</section>'+'</details>';
-  for(const [id,key,min,max] of [['experimentTarget','target',1,Infinity],['experimentBound','bound',0,10]]){
-    document.getElementById(id).addEventListener('change',event=>{
-      const value=Number(event.target.value);if(!Number.isInteger(value)||value<min||value>max){event.target.value=state[key];return}
-      state[key]=value;saveExperiment();refreshExperiment();renderExperiment();
-    });
-  }
-  document.getElementById('experimentScope').addEventListener('change',event=>{experimentScope=event.target.value;renderExperiment()});
-  document.getElementById('experimentGeneration').addEventListener('change',event=>{experimentGeneration=event.target.value;renderExperiment()});
+      BreedingMath.captureFlags(r).map(esc).join('<br>')+(r.parentEvidence==='controlled_record'?'<br>BT_ID parentaux déjà capturés dans l’enregistrement contrôlé : '+esc(r.motherId)+' / '+esc(r.fatherId)+' (parenté originale conservée ci-contre).':'')+'<br>Père : '+esc(experimentGenes(r.paternal))+'<br>Mère : '+esc(experimentGenes(r.maternal))+(e.conflict.some(Boolean)?'<br><span class="experiment-warning">Stats gémellaires contradictoires exclues.</span>':'')
+    ])))+'</section>'+ (ctx.results.quality.possible_unassigned.length?'<section class="experiment-section"><h2>Captures possibles hors de l’échantillon contrôlé</h2><p>Ces individus ne participent à aucun résultat de cette expérience. Un parent connu correspond, ce qui ne démontre ni l’autre filiation, ni une naissance dans cette série.</p>'+ctx.results.quality.possible_unassigned.map(r=>experimentPetHtml(data.byId.get(r.bt_id))).join('')+'</section>':'')+'</details>';
 
+  document.getElementById('experimentControlled').onclick=()=>{experimentMode='controlled';renderExperiment()};
+  document.getElementById('experimentHistory').onclick=()=>{experimentMode='global';renderExperiment()};
+  document.getElementById('experimentSelected')?.addEventListener('change',e=>{state.selectedExperimentId=e.target.value;saveExperiment();renderExperiment()});
+  document.getElementById('experimentScope')?.addEventListener('change',e=>{experimentScope=e.target.value;renderExperiment()});
+  document.getElementById('experimentGeneration')?.addEventListener('change',e=>{experimentGeneration=e.target.value;renderExperiment()});
+  document.getElementById('experimentBound').addEventListener('change',event=>{
+    const value=Number(event.target.value);if(!Number.isInteger(value)||value<0||value>10){event.target.value=bound;return}
+    if(controlled&&series)series.analysisBound=value;else state.bound=value;saveExperiment();renderExperiment();
+  });
+  document.getElementById('experimentNewTarget')?.addEventListener('change',event=>{const value=Number(event.target.value);if(Number.isInteger(value)&&value>0){state.target=value;saveExperiment()}else event.target.value=state.target});
   document.getElementById('experimentAdvanced').addEventListener('toggle',e=>{experimentAdvancedOpen=e.target.open});
-  document.getElementById('experimentChoose').addEventListener('click',()=>{experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
-  for(const [id,key] of [['experimentFemale','femaleId'],['experimentMale','maleId']])document.getElementById(id).addEventListener('change',event=>{experimentSelection={...selection,[key]:event.target.value};experimentChoosing=true;renderExperiment()});
-  document.getElementById('experimentStart').addEventListener('click',()=>{if(!startReason)startExperiment(pair)});
-  document.getElementById('experimentEnd').addEventListener('click',()=>{if(!running)return;series.status='ended';series.ended=new Date().toISOString();saveExperiment();renderExperiment()});
-  document.getElementById('experimentNext').addEventListener('click',()=>{experimentSelection={femaleId:next.female?.bt_id||'',maleId:next.male?.bt_id||'',reason:next.reason};experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
-  document.getElementById('experimentSend').addEventListener('click',async()=>{
+  document.getElementById('experimentChoose')?.addEventListener('click',()=>{experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
+  for(const [id,key] of [['experimentFemale','femaleId'],['experimentMale','maleId']])document.getElementById(id)?.addEventListener('change',event=>{experimentSelection={...selection,[key]:event.target.value};experimentChoosing=true;renderExperiment()});
+  document.getElementById('experimentStart')?.addEventListener('click',()=>{if(!startReason)startExperiment(pair)});
+  document.getElementById('experimentEnd')?.addEventListener('click',()=>{if(!running)return;series.status='ended';series.ended=new Date().toISOString();saveExperiment();renderExperiment()});
+  document.getElementById('experimentNext')?.addEventListener('click',()=>{experimentSelection={femaleId:next.female?.bt_id||'',maleId:next.male?.bt_id||'',reason:next.reason};experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
+  document.getElementById('experimentSend')?.addEventListener('click',async()=>{
     if(sendReason)return;
     breedingPanel={female_bt_id:current.female.bt_id,male_bt_id:current.male.bt_id};breedingPanelDirty=true;renderBreedingPairPanel();refreshSelectedDetail();
     const context=experimentContext,button=document.getElementById('experimentSend');button.disabled=true;
@@ -2566,8 +2567,8 @@ function renderExperiment(){
     try{message('Envoi…');const result=await sendBreedingPanel();message(result?.queued?'Couple en attente — utiliser Refresh en jeu.':'Couple déjà courant.')}catch(err){message('Non envoyé : '+err.message)}
     finally{if(context===experimentContext&&button.isConnected)button.disabled=false}
   });
-  document.getElementById('experimentPublish').addEventListener('click',openExperimentPublication);
-  showExperimentPublication();
+
+  document.getElementById('experimentPublish').addEventListener('click',openExperimentPublication);showExperimentPublication();
 }
 
 // An explicit publication exports a whitelisted, account-free snapshot. Credentials never enter state.
@@ -2579,30 +2580,42 @@ function experimentExport(){
     historical:p.historical===true,origin:p.origin||null,
     parents:{mother:{bt_id:p.mother_bt_id||null,label:p.mother||null},father:{bt_id:p.father_bt_id||null,label:p.father||null}},
     twin_source:p.twin_source||null,birth:{date:scalar(p.birth_date),time:scalar(p.birth_time),born_at:scalar(p.born_at)},first_seen:scalar(p.first_seen)}:null;
-  const result=events=>{const analysis=BreedingMath.analyze(events,bound);return {capture:BreedingMath.captureSummary(events,bound),analysis,
-    bloodlines:BreedingMath.bloodlines(events),histograms:BreedingMath.keys.map((key,i)=>({stat:key,counts:BreedingMath.histogram(events.filter(BreedingMath.reliableEvent),i)})),
-    totals:events.map(e=>({event_id:e.drawId,generation:e.generation,...BreedingMath.totals(e)})),lessons:BreedingMath.lessons(events,bound,analysis)}};
-  return {format:'BreedingAdvisorGenetics',format_version:3,published_at:new Date().toISOString(),calculator_version:'Experiment P3',species:'Snow_Wolf',
-    genetics_order:BreedingMath.keys,scope:'Complete selected-world history; account identifiers omitted',
-    parameters:{variation_bound:bound,target_draws:state.target,range:[0,10],model_A:'Choose paternal value with p, maternal with 1-p, add discrete delta, then clamp',
+  const experiments=experimentSessions().map(s=>{
+    const analysisBound=s.analysisBound??bound,target=s.target??state.target;
+    const ctx=BreedingMath.context(data,{series:s,bound:analysisBound,target});
+    const mother=animal(data.byId.get(s.femaleId)),father=animal(data.byId.get(s.maleId));
+    return {id:s.id,status:s.status||(s.id===state.series?.id?'running':'ended'),species:'Snow_Wolf',started:s.started||null,ended:s.ended||null,reason:s.reason||null,
+      target_at_start:s.target??null,bound_at_start:s.bound??null,baseline_ids:s.baselineIds,baseline_draws:s.baselineDraws,baseline_pet_ids:s.baselinePetIds||null,
+      mother,father,female_bt_id:s.femaleId,male_bt_id:s.maleId,
+      parameters:{analysis_bound:analysisBound,target,target_source:s.target===undefined?'Current user default; initial target was not recorded':'Experiment target'},
+      summary:{...ctx.summary,status:s.status||(s.id===state.series?.id?'running':'ended'),parents:{mother,father}},results:ctx.results};
+  });
+  const primaryIndex=experiments.findIndex(s=>s.id===state.selectedExperimentId),primary=experiments[primaryIndex]||null;
+  const history=BreedingMath.context(data,{bound});
+  return {format:'BreedingAdvisorGenetics',format_version:4,published_at:new Date().toISOString(),calculator_version:'Experiment P4',species:'Snow_Wolf',
+    genetics_order:BreedingMath.keys,scope:'Selected controlled experiment plus all retained experiments and independent complete history; account identifiers omitted',
+    selected_experiment:primary?{id:primary.id,summary_ref:'/experiments/'+primaryIndex+'/summary',results_ref:'/experiments/'+primaryIndex+'/results'}:null,
+    experiments,global_history:{summary:history.summary,results:history.results},
+    raw_data:{animals:data.pets.map(animal),
+      recordings:Object.values(state.records).map(r=>({bt_id:r.id,event_id:r.drawId,female_bt_id:r.femaleId,male_bt_id:r.maleId,experiment_id:r.sessionId,child_genetics:r.child})),
+      observations:data.rows.map(r=>({animal:animal(r.pet),analysed_genetics:r.child,event_id:r.drawId,generation:r.generation,experiment_id:r.sessionId,
+        capture_flags:BreedingMath.captureFlags(r),current_child_values_differ:r.childChanged,
+        analysed_parent_ids:{mother:r.motherId,father:r.fatherId,evidence:r.parentEvidence},event_evidence:r.drawEvidence})),
+      events:data.events.map(e=>({event_id:e.drawId,individual_bt_ids:e.members.map(r=>r.pet.bt_id),mother_bt_id:e.motherId,father_bt_id:e.fatherId,
+        child:e.child,maternal:e.maternal,paternal:e.paternal,generation:e.generation,conflict:e.conflict,twin_issue:e.twinIssue,session_conflict:e.sessionConflict,experiment_ids:e.sessionIds,
+        capture_flags:e.members.flatMap(BreedingMath.captureFlags),included_as_reliable_event:BreedingMath.reliableEvent(e),
+        evidence:e.members.map(r=>({bt_id:r.pet.bt_id,event_evidence:r.drawEvidence,parent_evidence:r.parentEvidence,original_twin_source:r.pet.twin_source||null}))}))},
+    methodology:{calculator_version:'Experiment P4',source:'Local Breeding Advisor v4.1.0; breeding-math.js collect/context/analyze',
+      parameters:{variation_bound:bound,target_draws:state.target,range:[0,10],model_A:'Choose paternal value with p, maternal with 1-p, add discrete delta, then clamp',
       model_B:'Round parental mean with Math.round, add discrete delta, then clamp',parent_values:'Recorded genetics resolved by full BT_ID among ACTIVE and ARCHIVED pets',
       genetics_talents:'Assumed constant; not vanilla probabilities',independence_unit:'Reliable twin_source event; seven stats are not seven independent births',
       em:{starts:[0.15,0.5,0.85],max_iterations:800,tolerance:1e-9,minimum_births:20,identifiability_tolerance:1e-7,equivalent_log_likelihood:1e-5,equivalent_parameter_difference:0.02},
       common_distribution:{minimum_matched_births:40,comparison_multiplier:4.1},generation_rule:'Known founders G0; 1+max of two known parental generations; otherwise unknown'},
-    animals:data.pets.map(animal),
-    experiments:experimentSessions().map(s=>({id:s.id,status:s.status||'running',started:s.started||null,ended:s.ended||null,reason:s.reason||null,
-      target_at_start:s.target??null,bound_at_start:s.bound??null,baseline_ids:s.baselineIds,baseline_draws:s.baselineDraws,baseline_pet_ids:s.baselinePetIds||null,
-      mother:animal(data.byId.get(s.femaleId)),father:animal(data.byId.get(s.maleId)),female_bt_id:s.femaleId,male_bt_id:s.maleId,
-      results:result(BreedingMath.seriesEvents(data,s))})),
-    recordings:Object.values(state.records).map(r=>({bt_id:r.id,event_id:r.drawId,female_bt_id:r.femaleId,male_bt_id:r.maleId,experiment_id:r.sessionId,child_genetics:r.child})),
-    observations:data.rows.map(r=>({animal:animal(r.pet),analysed_genetics:r.child,event_id:r.drawId,generation:r.generation,experiment_id:r.sessionId,
-      capture_flags:BreedingMath.captureFlags(r),current_child_values_differ:r.childChanged})),
-    events:data.events.map(e=>({event_id:e.drawId,individual_bt_ids:e.members.map(r=>r.pet.bt_id),mother_bt_id:e.pet.mother_bt_id||null,father_bt_id:e.pet.father_bt_id||null,
-      child:e.child,maternal:e.maternal,paternal:e.paternal,generation:e.generation,conflict:e.conflict,twin_issue:e.twinIssue,experiment_ids:e.sessionIds,
-      capture_flags:e.members.flatMap(BreedingMath.captureFlags),included_as_reliable_event:BreedingMath.reliableEvent(e)})),
-    results:result(data.events),generations:BreedingMath.generationSummary(data.events.filter(BreedingMath.reliableEvent),bound),
-    selected_view:{scope:experimentScope,generation:experimentGeneration},
-    reproduction:'Use animals and recordings to collect events, then analyze with parameters. Birth fields remain null when not recorded; first_seen is not a birth date.'};
+      per_experiment_parameters:'experiments[].parameters overrides default analysis bound and target; historical start parameters stay null if not recorded',
+      schema_changes:'v3 global results/generations are under global_history.results; original animals/observations/events/recordings are under raw_data; experiments[].results retained',
+      birth_metadata:'Only recorded birth fields are exported; first_seen is not a birth date',
+      reproduction:'Reconstruct pets from raw_data.animals (bloodline maps to lineage, parents to *_bt_id/labels), and records from raw_data.recordings. collect() retains evidence-based event IDs. context() applies each experiment ID/parents or the complete historical scope, then computes all results with its analysis bound. No generation filter applies to the primary export.'},
+    selected_view:{mode:experimentMode,scope:experimentMode==='controlled'?(primary?'session:'+primary.id:'none'):experimentScope,generation:experimentMode==='controlled'?'all':experimentGeneration}};
 }
 function showExperimentPublication(){
   const el=document.getElementById('experimentPublishState');if(!el||!experimentPublishResult)return;
@@ -2614,7 +2627,7 @@ function openExperimentPublication(){
   const dialog=document.getElementById('experimentPublishDialog'),form=document.getElementById('experimentPublishForm');
   form.reset();
   const snapshot=experimentExport(),context=experimentContext;
-  document.getElementById('experimentPublishSummary').textContent=snapshot.observations.length+' individus descendants et '+snapshot.experiments.length+' expériences. L’historique complet remplace latest.json ; les filtres à l’écran ne limitent pas cet export.';
+  document.getElementById('experimentPublishSummary').textContent=snapshot.raw_data.observations.length+' individus descendants et '+snapshot.experiments.length+' expériences. Référence primaire : '+(snapshot.selected_experiment?.id||'aucune')+'. Le contexte global reste séparé. Les données seront relues lors de la confirmation.';
   document.getElementById('experimentPublishConfirm').disabled=true;dialog.showModal();
   const input=document.getElementById('experimentGithubToken');
   input.oninput=()=>{document.getElementById('experimentPublishConfirm').disabled=!input.value.trim()};
@@ -2622,10 +2635,12 @@ function openExperimentPublication(){
   dialog.oncancel=()=>{input.value=''};
   dialog.onclose=()=>{input.value='';form.onsubmit=null};
   form.onsubmit=async event=>{
-    event.preventDefault();let token=input.value.trim();if(!token||experimentPublishing)return;experimentPublishing=true;input.value='';dialog.close();
+    event.preventDefault();let token=input.value.trim();if(!token||experimentPublishing)return;input.value='';dialog.close();
+    if(context!==experimentContext){token='';experimentPublishResult={text:'Publication annulée : le compte ou le monde a changé. Rouvrir la publication.'};showExperimentPublication();return}
+    const publication=experimentExport();experimentPublishing=true;
     if(context===experimentContext){experimentPublishResult={text:'Publication en cours…'};showExperimentPublication();document.getElementById('experimentPublish').disabled=true}
     try{
-      await publishExperimentGithub(snapshot,token);
+      await publishExperimentGithub(publication,token);
       if(context===experimentContext)experimentPublishResult={success:true,text:'Publication réussie — latest.json a été remplacé dans le dépôt privé.'};
     }catch(error){if(context===experimentContext)experimentPublishResult={text:error.message}}
     finally{token='';experimentPublishing=false;if(context===experimentContext)showExperimentPublication();const button=document.getElementById('experimentPublish');if(button)button.disabled=false}
@@ -2653,6 +2668,8 @@ async function publishExperimentGithub(snapshot,token){
   for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));
   const saved=await request(path,{method:'PUT',body:JSON.stringify({message:'Publish genetic experiment results',branch:'main',content:btoa(binary),...(previous?{sha:previous.sha}:{})})});
   if(saved.status===404)throw new Error('Publication refusée : vérifier l’accès en écriture du jeton au dépôt.');
+  const confirmation=await saved.json().catch(()=>null);
+  if(confirmation?.content?.path!=='research/genetics/latest.json'||!confirmation.content.sha)throw new Error('GitHub n’a pas confirmé le fichier publié. Vérifier latest.json avant de réessayer.');
 }
 
 async function sendBreedingPanel(){

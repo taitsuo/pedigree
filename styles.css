@@ -619,3 +619,11 @@ svg{display:block;min-width:100%;}
 .experiment-publish-dialog label{display:block;margin-bottom:8px}.experiment-publish-dialog input{box-sizing:border-box;width:100%}
 .experiment-publish-dialog a{color:var(--active)}
 @media(max-width:640px){.experiment-wrap{padding:12px}.experiment-pair>*{min-width:0;flex-basis:100%}.experiment-lessons{grid-template-columns:1fr}.experiment-controls label{display:grid;gap:6px}}
+
+/* P4 keeps the analysis context visible and separate from series actions. */
+.experiment-context{padding:16px;margin-bottom:12px;border:1px solid var(--border);border-left:4px solid var(--active);background:var(--card)}
+.experiment-context.is-history{border-left-color:var(--female)}
+.experiment-context h2{overflow-wrap:anywhere;margin:8px 0}
+.experiment-context [aria-pressed="true"]{border-color:var(--active);color:var(--text);font-weight:700}
+.experiment-context label{display:grid;gap:8px;max-width:100%}
+.experiment-context select{width:100%}

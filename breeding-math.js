@@ -25,52 +25,62 @@ const BreedingMath = (()=>{
     const wolves=pets.filter(p=>normalizeSpecies(p.species_key||p.actor_class)==='Snow_Wolf'
       &&['ACTIVE','ARCHIVED'].includes(p.lifecycle_state)&&validId(p.bt_id));
     const byId=new Map(wolves.map(p=>[p.bt_id,p]));
+    // Stored experiment records are evidence of IDs already captured, never guesses from labels.
+    function parentIds(p){
+      const record=records[p.bt_id],conflict=Boolean(record&&((p.mother_bt_id&&p.mother_bt_id!==record.femaleId)||(p.father_bt_id&&p.father_bt_id!==record.maleId)));
+      const recorded=record&&!conflict&&validId(record.femaleId)&&validId(record.maleId)&&record.femaleId!==record.maleId;
+      return {motherId:validId(p.mother_bt_id)||(recorded?record.femaleId:null),fatherId:validId(p.father_bt_id)||(recorded?record.maleId:null),recorded,conflict};
+    }
     const memo=new Map(),visiting=new Set();
     function generation(id){
       if(memo.has(id))return memo.get(id);
       const p=byId.get(id);if(!p||visiting.has(id))return null;
       visiting.add(id);
-      const f=validId(p.father_bt_id),m=validId(p.mother_bt_id);
+      const ids=parentIds(p),f=ids.fatherId,m=ids.motherId;
       const bred=Boolean(f||m||p.father||p.mother||p.twin_source||p.origin==='BRED');
       const fg=f?generation(f):null,mg=m?generation(m):null;
       const g=!bred?0:fg!==null&&mg!==null?Math.max(fg,mg)+1:null;
       visiting.delete(id);memo.set(id,g);return g;
     }
     function root(p){
-      const visited=new Set();let current=p;
-      while(current.twin_source){
-        if(visited.has(current.bt_id))return {id:p.bt_id,issue:true};
+      const visited=new Set(),expectedRoots=new Set();let current=p,evidence='individual_bt_id';
+      while(true){
+        const ids=parentIds(current),record=ids.recorded?records[current.bt_id]:null;
+        const saved=record?.drawId&&record.drawId!==current.bt_id?validId(record.drawId):null;
+        if(saved)expectedRoots.add(saved);
+        const link=current.twin_source||saved;
+        if(!link)return {id:current.bt_id,issue:ids.conflict||[...expectedRoots].some(id=>id!==current.bt_id),evidence};
+        if(visited.has(current.bt_id))return {id:p.bt_id,issue:true,evidence:'unresolved_link'};
         visited.add(current.bt_id);
-        const source=byId.get(validId(current.twin_source));
-        if(!source||!validId(current.mother_bt_id)||!validId(current.father_bt_id)
-          ||source.mother_bt_id!==current.mother_bt_id||source.father_bt_id!==current.father_bt_id)return {id:p.bt_id,issue:true};
-        current=source;
+        const source=byId.get(validId(link)),sourceIds=source?parentIds(source):null;
+        if(!source||ids.conflict||sourceIds.conflict||!ids.motherId||!ids.fatherId||sourceIds.motherId!==ids.motherId||sourceIds.fatherId!==ids.fatherId)return {id:p.bt_id,issue:true,evidence:'unresolved_link'};
+        evidence=current.twin_source?'twin_source':'controlled_record';current=source;
       }
-      return {id:current.bt_id,issue:false};
     }
     wolves.forEach(p=>generation(p.bt_id));
-    const rows=wolves.filter(p=>p.mother_bt_id||p.father_bt_id||p.mother||p.father||p.twin_source||p.origin==='BRED').map(p=>{
-      const r=root(p),record=records[p.bt_id];
-      const recorded=record&&record.femaleId===p.mother_bt_id&&record.maleId===p.father_bt_id;
+    const rows=wolves.filter(p=>p.mother_bt_id||p.father_bt_id||p.mother||p.father||p.twin_source||p.origin==='BRED'||records[p.bt_id]).map(p=>{
+      const r=root(p),record=records[p.bt_id],ids=parentIds(p);
+      const recorded=ids.recorded;
       const child=genetics(p),cg=recorded?record.child:child;
-      const mother=byId.get(validId(p.mother_bt_id))||null,father=byId.get(validId(p.father_bt_id))||null;
-      return {pet:p,mother,father,
-        key:pairKey(p.mother_bt_id,p.father_bt_id),drawId:r.id,twinIssue:r.issue,generation:generation(p.bt_id),
+      const mother=byId.get(ids.motherId)||null,father=byId.get(ids.fatherId)||null;
+      return {pet:p,mother,father,motherId:ids.motherId,fatherId:ids.fatherId,parentConflict:ids.conflict,drawEvidence:r.evidence,
+        parentEvidence:recorded&&(!p.mother_bt_id||!p.father_bt_id)?'controlled_record':'original_bt_id',
+        key:pairKey(ids.motherId,ids.fatherId),drawId:r.id,twinIssue:r.issue,generation:generation(p.bt_id),
         child:cg,maternal:genetics(mother),paternal:genetics(father),
-        sessionId:recorded?record.sessionId:null,
+        sessionId:record?.sessionId||null,recordMotherId:record?.femaleId||null,recordFatherId:record?.maleId||null,
         childChanged:recorded&&child.some((v,i)=>numeric(v)&&numeric(cg[i])&&v!==cg[i])};
     });
     const groups=new Map();
     for(const r of rows){if(!groups.has(r.drawId))groups.set(r.drawId,[]);groups.get(r.drawId).push(r)}
     const events=[];
     for(const [id,members] of groups){
-      const first=members[0],merge=field=>keys.map((_,i)=>{
+      const first=members.find(r=>r.mother&&r.father)||members[0],merge=field=>keys.map((_,i)=>{
         const values=[...new Set(members.map(r=>r[field][i]).filter(numeric))];return values.length===1?values[0]:null;
       });
       const conflict=keys.map((_,i)=>['child','maternal','paternal'].some(field=>
         new Set(members.map(r=>r[field][i]).filter(numeric)).size>1));
       events.push({...first,drawId:id,members,child:merge('child'),maternal:merge('maternal'),paternal:merge('paternal'),conflict,
-        twinIssue:members.some(r=>r.twinIssue),sessionIds:[...new Set(members.map(r=>r.sessionId).filter(Boolean))]});
+        twinIssue:members.some(r=>r.twinIssue),sessionConflict:new Set(members.map(r=>r.sessionId).filter(Boolean)).size>1,sessionIds:[...new Set(members.map(r=>r.sessionId).filter(Boolean))]});
     }
     const breeders=wolves.filter(p=>p.lifecycle_state==='ACTIVE'&&!p.historical&&p.stage==='adult'
       &&['Female','Male'].includes(p.sex)&&genetics(p).some(numeric));
@@ -79,7 +89,7 @@ const BreedingMath = (()=>{
   function observations(events,index,bound){
     return events.map(e=>{
       const c=e.child[index],f=e.paternal[index],m=e.maternal[index];
-      const usable=!e.twinIssue&&!e.conflict[index]&&e.pet.mother_bt_id&&e.pet.father_bt_id&&e.pet.mother_bt_id!==e.pet.father_bt_id;
+      const usable=!e.twinIssue&&!e.sessionConflict&&!e.members.some(r=>r.parentConflict)&&!e.conflict[index]&&e.motherId&&e.fatherId&&e.motherId!==e.fatherId;
       return {c,f,m,eventId:e.drawId,generation:e.generation,...classify(c,usable?f:null,usable?m:null,bound)};
     });
   }
@@ -220,7 +230,7 @@ const BreedingMath = (()=>{
         histograms:keys.map((_,i)=>histogram(rows,i)),analysis:analyze(rows,bound)};
     });
   }
-  function seriesEvents(data,series){return data.events.filter(e=>e.sessionIds.includes(series.id))}
+  function seriesEvents(data,series){return data.events.filter(e=>e.sessionIds.includes(series.id)&&e.members.some(r=>r.key===pairKey(series.femaleId,series.maleId)||(r.recordMotherId===series.femaleId&&r.recordFatherId===series.maleId)))}
   function recommend(data,state,analysis){
     const parent=(sex,genes)=>data.breeders.filter(p=>p.sex===sex&&same(genetics(p),genes)).sort((a,b)=>a.bt_id.localeCompare(b.bt_id,'en',{numeric:true}))[0]||null;
     function candidate(f,m,kind){
@@ -251,7 +261,7 @@ const BreedingMath = (()=>{
       :next.kind==='reverse'?'Inverser les valeurs père/mère aide à distinguer une préférence parentale des variations. Les fréquences restent à estimer.'
       :next.kind==='initial'?'Full 8 × Full 2 apporte sept observations par naissance et peut départager sélection parentale et moyenne parentale.'
       :'Ce couple existant apporte des combinaisons parentales informatives sans sélectionner les descendants pour augmenter leur score.';
-    if(next.count)next.reason+=' '+next.count+' naissances contrôlées déjà documentées ; compléter l’échantillon.';
+    if(next.count)next.reason+=' '+next.count+' tirages déjà documentés dans ce périmètre ; compléter l’échantillon.';
     if(next.female&&next.male){const gs=[data.generations.get(next.female.bt_id),data.generations.get(next.male.bt_id)];if(gs.some(g=>g>0))next.reason+=' Reproducteurs descendants : comparer aussi avec les générations précédentes.'}
     return next;
   }
@@ -259,13 +269,14 @@ const BreedingMath = (()=>{
   // Capture diagnostics never infer a missing parent or a twin from matching genetics.
   function captureFlags(row){
     const flags=[];
-    if(!row.pet.mother_bt_id||!row.pet.father_bt_id)flags.push('Parenté incomplète : vérifier la capture (jumeau possible, non confirmé).');
+    if(!row.motherId||!row.fatherId)flags.push('Parenté incomplète : vérifier la capture (jumeau possible, non confirmé).');
     else if(!row.mother||!row.father)flags.push('Parent introuvable par BT_ID.');
-    if(row.pet.mother_bt_id&&row.pet.mother_bt_id===row.pet.father_bt_id)flags.push('Même BT_ID pour les deux parents.');
+    if(row.motherId&&row.motherId===row.fatherId)flags.push('Même BT_ID pour les deux parents.');
+    if(row.parentConflict)flags.push('Parenté actuelle incompatible avec les BT_ID déjà enregistrés.');
     if(row.twinIssue)flags.push('Lien twin_source non résolu ou incohérent.');
     return flags;
   }
-  function reliableEvent(e){return !e.twinIssue&&e.members.every(r=>!captureFlags(r).length)}
+  function reliableEvent(e){return !e.twinIssue&&!e.sessionConflict&&e.members.every(r=>!captureFlags(r).length)}
   function captureSummary(events,bound=3){
     const rows=events.flatMap(e=>e.members),reliable=events.filter(reliableEvent);
     return {individuals:rows.length,draws:reliable.length,
@@ -273,7 +284,8 @@ const BreedingMath = (()=>{
       twinGroups:reliable.filter(e=>e.members.length>1).length,
       linkedTwins:reliable.reduce((n,e)=>n+Math.max(0,e.members.length-1),0),
       uncertain:rows.filter(r=>captureFlags(r).length).length,
-      conflicting:events.filter(e=>e.conflict.some(Boolean)).length};
+      conflicting:events.filter(e=>e.conflict.some(Boolean)||e.sessionConflict).length,
+      events:events.length,uncertainEvents:events.filter(e=>!reliableEvent(e)).length};
   }
   function bloodlines(events){
     const counts={father:0,mother:0,other:0,same:0,sameOther:0};let excluded=0;
@@ -309,8 +321,69 @@ const BreedingMath = (()=>{
     const b=analysis.stats.reduce((n,s)=>n+s.alternativeContradictions,0);
     lines.push({kind:analysis.counts.neither||b?'Hypothèses contredites':'Hypothèses compatibles à ce stade',text:'Avec la borne supposée ±'+bound+', sélection parentale + variation : '+analysis.counts.neither+' valeurs impossibles sur '+analysis.n+' ('+contradictionsA.size+' tirages). Moyenne arrondie + variation : '+b+' valeurs impossibles ('+contradictionsB.size+' tirages).'+(!analysis.counts.neither&&!b?' Les deux modèles expliquent encore toutes ces observations ; aucun n’est confirmé.':analysis.counts.neither&&b?' Les deux modèles rencontrent des contre-exemples : revoir leurs règles, sans forcer les données.':' Le modèle sans contre-exemple reste seulement compatible avec les données.')});
     lines.push({kind:'Questions ouvertes',text:analysis.births<20?'Seulement '+analysis.births+' tirages analysables : compléter l’échantillon. Vingt tirages ne garantissent pas de distinguer les modèles.': 'Les '+analysis.births+' tirages fournissent '+analysis.n+' valeurs de stats, pas '+analysis.n+' naissances indépendantes. '+(analysis.stats.some(s=>s.estimate.p!==null)?'Certaines préférences parentales sont estimables, mais restent exploratoires ; consulter les estimations avancées.':'La préférence père/mère reste indéterminée avec ces données.')+' Inverser les valeurs parentales et tester des parents identiques aide à séparer préférence et variation.'});
-    if(capture.uncertain||capture.conflicting)lines.push({kind:'Captures à vérifier',text:capture.uncertain+' individus à parenté ou lien gémellaire incertain ; '+capture.conflicting+' événements avec des stats gémellaires contradictoires. Les valeurs concernées sont exclues des estimations ; aucun lien manquant n’est inventé.'});
+    if(capture.uncertain||capture.conflicting)lines.push({kind:'Captures à vérifier',text:capture.uncertain+' individus à parenté ou lien gémellaire incertain ; '+capture.conflicting+' événements contradictoires (stats gémellaires ou attribution de série). Les valeurs concernées sont exclues des estimations ; aucun lien manquant n’est inventé.'});
     return lines;
   }
-  return Object.freeze({captureFlags,reliableEvent,captureSummary,bloodlines,lessons,keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});
+
+  // A context computes one result object consumed by both the view and serialization.
+  function context(data,{series=null,controlled=Boolean(series),scope='all',generation='all',bound=3,target=20}={}){
+    const type=controlled?'controlled_experiment':'global_history';
+    let base=controlled?(series?seriesEvents(data,series):[]):data.events;
+    if(!controlled&&scope.startsWith('pair:'))base=base.filter(e=>e.key===scope.slice(5));
+    if(!series&&scope.startsWith('genes:'))base=base.filter(e=>JSON.stringify([e.maternal,e.paternal])===scope.slice(6));
+    // Controlled experiments are never silently narrowed by a historical generation filter.
+    const events=!controlled&&generation!=='all'?base.filter(e=>String(e.generation)===generation):base;
+    const graphEvents=events.filter(reliableEvent),analysis=analyze(events,bound),capture=captureSummary(events,bound),blood=bloodlines(events);
+    const selectedIds=new Set(events.flatMap(e=>e.members.map(r=>r.pet.bt_id)));
+    const related=series?data.rows.filter(r=>!selectedIds.has(r.pet.bt_id)&&!series.baselinePetIds?.includes(r.pet.bt_id)&&
+      ((!r.fatherId&&r.motherId===series.femaleId)||(!r.motherId&&r.fatherId===series.maleId))):[];
+    const inclusion={type,experiment_id:series?.id||null,scope:controlled?(series?'session:'+series.id:'none'):scope,generation:controlled?'all':generation,
+      membership:series?'Explicit experiment record ID and matching recorded parental BT_IDs; contradictory captures retained but excluded; reliable linked members share an event':'All historical offspring, including archived animals; optional explicit pair/genetics/generation filters',
+      draw_rule:'Deduplicate reliable twin_source or retained controlled event IDs; never deduplicate by genetics or names',
+      model_rule:'Two identified parents with numeric child/parent values for the stat; conflicting or unresolved events excluded',
+      histogram_rule:'Reliable event identity and parent IDs; valid child value 0-10; conflicting stat excluded',event_ids:events.map(e=>e.drawId)};
+    const models=(items,alternative=false)=>{
+      const known=items.filter(o=>o.kind!=='unknown'),bad=known.filter(o=>alternative?!o.alternative:o.kind==='neither'),births=new Set(known.map(o=>o.eventId)).size;
+      return {observations:known.length,draws:births,contradictions:bad.length,contradicted_event_ids:[...new Set(bad.map(o=>o.eventId))],
+        observed_compatibility:known.length?100*(known.length-bad.length)/known.length:null,
+        status:bad.length?'contradicted':!known.length?'not_evaluable':'compatible_at_this_stage',sample_status:births<20?'insufficient':'exploratory'};
+    };
+    const perStat=keys.map((stat,i)=>{
+      const obs=analysis.perStat[i],valid=obs.filter(o=>o.kind!=='unknown');
+      const range=field=>valid.length?{min:Math.min(...valid.map(o=>o[field])),max:Math.max(...valid.map(o=>o[field])),n:valid.length}:null;
+      const bins=histogram(graphEvents,i);
+      return {stat,histogram:bins,histogram_draws:bins.reduce((a,b)=>a+b,0),deltas:{father:range('df'),mother:range('dm')},
+        model_A:models(obs),model_B:models(obs,true)};
+    });
+    const quality={uncertain_events:events.filter(e=>!reliableEvent(e)).map(e=>({event_id:e.drawId,individual_bt_ids:e.members.map(r=>r.pet.bt_id),
+        reasons:[...new Set([...e.members.flatMap(captureFlags),...(e.sessionConflict?['Plusieurs expériences revendiquent le même événement.']:[])])]})),
+      per_stat_exclusions:keys.map((stat,i)=>({stat,excluded:observations(events,i,bound).filter(o=>o.kind==='unknown').map(o=>({event_id:o.eventId,
+        reasons:events.find(e=>e.drawId===o.eventId).conflict[i]?['Stats contradictoires dans un groupe gémellaire']:['Parenté, événement ou valeur génétique non exploitable']}))})),
+      possible_unassigned:related.map(r=>({bt_id:r.pet.bt_id,known_mother_bt_id:r.pet.mother_bt_id||null,known_father_bt_id:r.pet.father_bt_id||null,
+        reason:'Un parent connu correspond au couple ; autre parent absent. Association possible seulement, hors résultats contrôlés.'})),
+      recorded_parent_evidence:events.flatMap(e=>e.members.filter(r=>r.parentEvidence==='controlled_record').map(r=>r.pet.bt_id)),
+      limits:['Absence de twin_source ne prouve pas une naissance unique. Sans identifiant fiable partagé, des jumeaux peuvent rester non reconnus.',
+        'Aucune parenté ni date de naissance n’est déduite des noms, des genetics identiques ou de first_seen.',
+        'Les talents Genetics sont supposés constants ; ces résultats ne déterminent pas les probabilités vanilla.']};
+    const findings=lessons(events,bound,analysis);
+    if(analysis.births&&analysis.births<20)findings.unshift({kind:'Données insuffisantes',text:analysis.births+' tirages analysables : les constats suivants sont descriptifs, sans estimation établie du mécanisme.'});
+    const bloodOther=blood.counts.other+blood.counts.sameOther;
+    findings.push({kind:'Bloodlines',text:blood.n?bloodOther+' / '+blood.n+' tirages ont une Bloodline différente des deux parents. '+(bloodOther?'L’héritage nécessaire d’une Bloodline parentale est contredit par ces observations.':'Aucun contre-exemple ici ; cela ne prouve pas une transmission limitée aux parents.'):'Bloodlines : données insuffisantes pour comparer les descendants et les deux parents.'});
+    const noteworthy=['A','B'].map(model=>{
+      const bad=perStat.filter(s=>s['model_'+model].contradictions);
+      return bad.length?'Modèle '+model+' contredit pour '+bad.map(s=>names[keys.indexOf(s.stat)]+' ('+s['model_'+model].contradictions+'/'+s['model_'+model].observations+')').join(', ')+'.':null;
+    }).filter(Boolean);
+    if(noteworthy.length)findings.push({kind:'Stats marquantes',text:noteworthy.join(' ')+' Les fractions indiquent les valeurs impossibles / les valeurs analysables pour chaque stat.'});
+    const all=analysis.perStat.flat(),modelTests={A:models(all),B:models(all,true)};
+    const summary={type,experiment_id:series?.id||null,species:'Snow_Wolf',status:series?.status|| (series?'running':'historical'),target:series?target:null,
+      progression:series?{analysable_draws:capture.analysable,target,objective_reached:capture.analysable>=target}:null,
+      sample:capture,inclusion,models:modelTests,findings,notable_stats:perStat,limitations:quality.limits,
+      possible_unassigned_count:related.length,open_questions:findings.filter(f=>f.kind==='Questions ouvertes').map(f=>f.text)};
+    const results={scope:inclusion,capture,analysis,per_stat:perStat,bloodlines:{...blood,parent_only_hypothesis:{status:bloodOther?'contradicted':blood.n?'compatible_at_this_stage':'not_evaluable',contradictions:bloodOther,n:blood.n}},
+      histograms:perStat.map(s=>({stat:s.stat,counts:s.histogram,n:s.histogram_draws})),
+      totals:events.map(e=>({event_id:e.drawId,generation:e.generation,...totals(e),reliable:reliableEvent(e),complete:!e.conflict.some(Boolean)&&sum(e.child)!==null})),
+      generations:generationSummary(graphEvents,bound),quality,lessons:findings,model_tests:modelTests};
+    return {type,experiment_id:series?.id||null,inclusion,events,graphEvents,results,summary};
+  }
+  return Object.freeze({context,captureFlags,reliableEvent,captureSummary,bloodlines,lessons,keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});
 })();
