@@ -627,3 +627,13 @@ svg{display:block;min-width:100%;}
 .experiment-context [aria-pressed="true"]{border-color:var(--active);color:var(--text);font-weight:700}
 .experiment-context label{display:grid;gap:8px;max-width:100%}
 .experiment-context select{width:100%}
+
+/* Optional distribution summaries share the P4 context and theme. */
+.experiment-chart-heading{display:flex;justify-content:space-between;align-items:start;gap:16px;flex-wrap:wrap}
+.experiment-generation-numbers{margin:0 0 12px!important;white-space:nowrap;font-size:14px}.experiment-generation-numbers strong{color:var(--text)}
+.experiment-checkbox{display:flex!important;align-items:center;gap:8px;margin:12px 0}.experiment-checkbox input,.experiment-publish-dialog .experiment-checkbox input{width:auto}
+.experiment-distribution{min-width:0;border:1px solid var(--border);border-radius:6px;padding:12px}.experiment-distribution .experiment-chart{border:0;padding:0;margin:0}
+.experiment-charts.is-aggregated{grid-template-columns:1fr}.experiment-charts.is-aggregated .experiment-histogram{max-width:900px}
+.experiment-comparisons{display:grid;gap:12px;font-size:12px}.experiment-comparisons h4{margin:12px 0 8px}.experiment-comparisons dl{margin:0}
+.experiment-comparisons dl>div{display:flex;justify-content:space-between;gap:8px;padding:4px 0}.experiment-comparisons dd{margin:0;text-align:right}.experiment-comparisons p{margin:6px 0}
+.experiment-charts.is-aggregated .experiment-comparisons{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}

@@ -164,9 +164,12 @@
     <p>Dépôt privé <strong>taitsuo/chatgpt-icarus</strong>, branche <strong>main</strong>.<br>Le fichier <strong>research/genetics/latest.json</strong> sera remplacé par le format P4 : expérience primaire, expériences conservées, historique séparé et observations originales.</p>
     <p id="experimentPublishSummary"></p>
     <p>Créer un <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">jeton personnel à permissions fines</a> : propriétaire taitsuo, uniquement le dépôt chatgpt-icarus, permission <strong>Contents: Read and write</strong>. Metadata en lecture est ajoutée par GitHub. Choisir une expiration courte. Les droits portent sur le dépôt, pas uniquement sur ce fichier.</p>
-    <label for="experimentGithubToken">Jeton GitHub (utilisé pour cet envoi uniquement)</label>
+    <label for="experimentGithubToken">Jeton GitHub</label>
     <input class="control" id="experimentGithubToken" type="password" autocomplete="off" spellcheck="false" required>
-    <p>Le jeton n’est ni enregistré, ni exporté, ni journalisé. Les Steam ID, identifiants de compte et données runtime inutiles sont exclus de l’export.</p>
+    <label class="experiment-checkbox"><input id="experimentRememberGithubToken" type="checkbox"> Mémoriser le token sur cet ordinateur</label>
+      <button class="control" id="experimentForgetGithubToken" type="button">Oublier le token</button>
+      <p id="experimentGithubStorageState" role="status"></p>
+      <p>Option désactivée par défaut. Un jeton mémorisé dans le navigateur reste accessible aux scripts de cette origine. Utilisez un ordinateur de confiance. Un jeton valide peut être réutilisé jusqu’à expiration ou révocation. Le jeton n’est jamais exporté ni journalisé. Les Steam ID, identifiants de compte et données runtime inutiles sont exclus de l’export.</p>
     <div class="experiment-actions"><button class="control" type="button" id="experimentPublishCancel">Annuler</button><button class="control primary-control" id="experimentPublishConfirm" type="submit" disabled>Publier et remplacer latest.json</button></div>
   </form>
 </dialog>

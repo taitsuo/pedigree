@@ -325,6 +325,46 @@ const BreedingMath = (()=>{
     return lines;
   }
 
+
+  // Descriptive additions reuse context histograms, events and generation means; no model is refitted.
+  function descriptiveResults(data,series,results,graphEvents){
+    const eligible=keys.map((_,i)=>new Set(graphEvents.filter(e=>!e.conflict[i]&&Number.isInteger(e.child[i])&&e.child[i]>=0&&e.child[i]<=10).map(e=>e.drawId)));
+    const comparison=values=>{
+      const n=values.length,lower=values.filter(v=>v<0).length,equal=values.filter(v=>v===0).length,higher=values.filter(v=>v>0).length,delta_sum=values.reduce((a,b)=>a+b,0);
+      return {n,lower,equal,higher,frequencies:{lower:n?lower/n:null,equal:n?equal/n:null,higher:n?higher/n:null},delta_sum,mean_delta:n?delta_sum/n:null};
+    };
+    const parentComparisons=keys.map((stat,i)=>{
+      const usable=results.analysis.perStat[i].filter(o=>eligible[i].has(o.eventId));
+      return {stat,father:comparison(usable.filter(o=>numeric(o.f)).map(o=>o.c-o.f)),mother:comparison(usable.filter(o=>numeric(o.m)).map(o=>o.c-o.m))};
+    });
+    const pooled=side=>{
+      const rows=parentComparisons.map(c=>c[side]),n=rows.reduce((a,r)=>a+r.n,0),delta_sum=rows.reduce((a,r)=>a+r.delta_sum,0);
+      const counts=Object.fromEntries(['lower','equal','higher'].map(k=>[k,rows.reduce((a,r)=>a+r[k],0)]));
+      return {n,...counts,frequencies:Object.fromEntries(Object.entries(counts).map(([k,v])=>[k,n?v/n:null])),delta_sum,mean_delta:n?delta_sum/n:null};
+    };
+    const counts=Array.from({length:11},(_,v)=>results.histograms.reduce((n,h)=>n+h.counts[v],0)),n=counts.reduce((a,b)=>a+b,0);
+    const draws=new Set(eligible.flatMap(ids=>[...ids])).size;
+    const mother=series?data.byId.get(series.femaleId):null,father=series?data.byId.get(series.maleId):null;
+    const mg=genetics(mother),fg=genetics(father),known=mg.every(numeric)&&fg.every(numeric);
+    const conditions=!series?'multiple_crosses':!known?'unknown':mg.every(v=>v===mg[0])&&fg.every(v=>v===fg[0])?'same_across_stats':'mixed_across_stats';
+    const founderParents=series&&data.generations.get(series.femaleId)===0&&data.generations.get(series.maleId)===0;
+    const parentalTotals=[sum(mg),sum(fg)],g0=founderParents&&parentalTotals.every(numeric)?(parentalTotals[0]+parentalTotals[1])/2:null;
+    const first=series?results.generations.find(g=>g.generation===1):null,g1=first?.mean??null;
+    const bloodValue=p=>typeof p?.lineage==='string'&&p.lineage.trim()&&!/^(unknown|inconnu|inconnue)$/i.test(p.lineage.trim())?p.lineage.trim():null;
+    const f=bloodValue(father),m=bloodValue(mother),blood=results.bloodlines;
+    const row=(key,label,count)=>({key,label,count,n:blood.n,frequency:blood.n?count/blood.n:null});
+    const bloodDisplay=series&&f&&m?(f===m?{mode:'same',note:'La Bloodline parentale est commune : l’origine paternelle ou maternelle est indiscernable.',rows:[row('parental','Bloodline parentale commune — '+f,blood.counts.same),row('other','Autre Bloodline',blood.counts.other+blood.counts.sameOther)]}
+      :{mode:'different',note:null,rows:[row('father','Bloodline du père — '+f,blood.counts.father),row('mother','Bloodline de la mère — '+m,blood.counts.mother),row('other','Autre Bloodline',blood.counts.other+blood.counts.sameOther)]})
+      :series?{mode:'unknown',note:'Bloodline d’un parent inconnue : comparaison parentale non disponible.',rows:[]}
+      :{mode:'history',note:'Plusieurs couples historiques ; aucune Bloodline commune n’est attribuée à un parent.',rows:[row('father','Bloodline du père (parents différents)',blood.counts.father),row('mother','Bloodline de la mère (parents différents)',blood.counts.mother),row('parental','Bloodline parentale commune',blood.counts.same),row('other','Autre Bloodline',blood.counts.other+blood.counts.sameOther)]};
+    return {aggregate_distribution:{counts,n,draws,maximum_values_per_draw:7,complete:n===draws*7,parental_conditions:conditions,
+        interpretation:'Exploratory pooling of stat values; seven stats are not seven independent births; no common distribution is assumed'},
+      parent_comparisons:parentComparisons,aggregate_parent_comparisons:{father:pooled('father'),mother:pooled('mother')},
+      generation_comparison:series?{g0,g1,delta:g0!==null&&g1!==null?g1-g0:null,g0_parents:g0===null?0:2,g1_draws:first?.totalCount||0,
+        note:founderParents?'G0: mean total of the two founders; G1: mean complete total per reliable G1 event':'G0 unavailable: the two parents are not both identified G0 founders'}:null,
+      bloodline_display:bloodDisplay,scope:results.scope};
+  }
+
   // A context computes one result object consumed by both the view and serialization.
   function context(data,{series=null,controlled=Boolean(series),scope='all',generation='all',bound=3,target=20}={}){
     const type=controlled?'controlled_experiment':'global_history';
@@ -383,6 +423,7 @@ const BreedingMath = (()=>{
       histograms:perStat.map(s=>({stat:s.stat,counts:s.histogram,n:s.histogram_draws})),
       totals:events.map(e=>({event_id:e.drawId,generation:e.generation,...totals(e),reliable:reliableEvent(e),complete:!e.conflict.some(Boolean)&&sum(e.child)!==null})),
       generations:generationSummary(graphEvents,bound),quality,lessons:findings,model_tests:modelTests};
+    results.descriptive=descriptiveResults(data,series,results,graphEvents);
     return {type,experiment_id:series?.id||null,inclusion,events,graphEvents,results,summary};
   }
   return Object.freeze({context,captureFlags,reliableEvent,captureSummary,bloodlines,lessons,keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});

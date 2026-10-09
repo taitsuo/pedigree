@@ -2363,7 +2363,7 @@ document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
 });
 let experimentState={version:2,target:20,bound:3,series:null,sessions:[],records:{}};
 let experimentContext=null,experimentData=null,experimentScope='all',experimentGeneration='all';
-let experimentMode='controlled';
+let experimentMode='controlled',experimentGrouped=false;
 let experimentSelection=null,experimentChoosing=false,experimentAdvancedOpen=false,experimentPublishResult=null,experimentPublishing=false;
 const experimentSessions=()=>[...experimentState.sessions,...(experimentState.series?[experimentState.series]:[])];
 function saveExperiment(){
@@ -2373,7 +2373,7 @@ function saveExperiment(){
 function refreshExperiment(){
   const key='breeding-tool-experiment-p1:'+draftKey(BTView.world);
   if(key!==experimentContext){
-    experimentContext=key;experimentMode='controlled';experimentScope='all';experimentGeneration='all';experimentSelection=null;experimentChoosing=false;experimentPublishResult=null;
+    experimentContext=key;experimentMode='controlled';experimentGrouped=false;experimentScope='all';experimentGeneration='all';experimentSelection=null;experimentChoosing=false;experimentPublishResult=null;
     experimentState={version:2,target:20,bound:3,series:null,sessions:[],records:{}};
     try{
       const saved=JSON.parse(localStorage.getItem(key));
@@ -2445,11 +2445,31 @@ function experimentParentHtml(p,sex,genes,expectedId=null){
   return '<div class="experiment-warning"><strong>Create with Rada: '+sex+' '+(full?'Full '+genes[0]:esc(experimentGenes(genes)))+'</strong><p>Animal à créer, pas encore présent. Nom, BT_ID, parents et bloodline inconnus ; genetics demandées : '+esc(experimentGenes(genes))+' ; total demandé : '+experimentNumber(BreedingMath.sum(genes))+'. Attendre son apparition comme adulte actif dans le JSON.</p></div>';
 }
 function experimentTable(headers,rows){return '<div class="experiment-table-scroll"><table class="experiment-table"><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.map(cells=>'<tr>'+cells.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'}
-function experimentHistogram(bins,i){
+function experimentHistogram(bins,i,title=null,unit='tirages'){
   const max=Math.max(1,...bins),n=bins.reduce((a,b)=>a+b,0);
-  return '<div class="experiment-chart"><h3>'+BreedingMath.names[i]+' ('+BreedingMath.keys[i]+') — '+n+' tirages</h3><div class="experiment-histogram">'+
-    bins.map((count,v)=>'<div class="experiment-bin" title="'+count+' tirages de valeur '+v+'"><span>'+count+'</span><div class="experiment-bar" style="height:'+Math.round(100*count/max)+'px"></div><span>'+v+'</span></div>').join('')+'</div></div>';
+  return '<div class="experiment-chart"><h3>'+(title||BreedingMath.names[i]+' ('+BreedingMath.keys[i]+')')+' — '+n+' '+unit+'</h3><div class="experiment-histogram">'+
+    bins.map((count,v)=>'<div class="experiment-bin" title="'+count+' '+unit+' de valeur '+v+'"><span>'+count+'</span><div class="experiment-bar" style="height:'+Math.round(100*count/max)+'px"></div><span>'+v+'</span></div>').join('')+'</div></div>';
 }
+
+const experimentDecimal=v=>BreedingMath.numeric(v)?v.toLocaleString('fr-FR',{maximumFractionDigits:2}):'—';
+function experimentSigned(v){if(!BreedingMath.numeric(v))return '—';const rounded=Math.round(v*100)/100;return (rounded>0?'+':rounded<0?'−':'')+Math.abs(rounded).toLocaleString('fr-FR',{minimumFractionDigits:rounded===0?0:2,maximumFractionDigits:2})}
+function experimentComparisonHtml(comparisons){
+  return '<div class="experiment-comparisons">'+[['father','père'],['mother','mère']].map(([key,label])=>{
+    const c=comparisons[key];return '<div><h4>Par rapport au '+label+'</h4><dl>'+[['lower','Inférieure'],['equal','Égale'],['higher','Supérieure']].map(([kind,text])=>'<div><dt>'+text+'</dt><dd>'+c[kind]+' / '+c.n+' — '+(c.n?experimentPercent(c.frequencies[kind]):'—')+'</dd></div>').join('')+'</dl><p>Δ moyen '+label+' : <strong>'+experimentSigned(c.mean_delta)+'</strong> points</p></div>';
+  }).join('')+'</div>';
+}
+function experimentDistributionHtml(ctx,grouped){
+  const d=ctx.results.descriptive;
+  if(!grouped)return BreedingMath.keys.map((_,i)=>experimentHistogram(ctx.results.histograms[i].counts,i)+experimentComparisonHtml(d.parent_comparisons[i])).map(html=>'<div class="experiment-distribution">'+html+'</div>').join('');
+  const a=d.aggregate_distribution;
+  const warning=a.parental_conditions==='mixed_across_stats'?'Les valeurs parentales diffèrent selon les stats : ce regroupement mélange des conditions différentes et peut masquer leurs comportements.':a.parental_conditions==='unknown'?'Valeurs parentales incomplètes : les conditions des sept stats ne peuvent pas toutes être comparées.':'';
+  return '<div class="experiment-distribution">'+experimentHistogram(a.counts,null,'Sept stats regroupées','valeurs')+'<p><strong>'+a.n+' valeurs — '+a.draws+' tirages'+(a.complete?' × 7 stats':', jusqu’à 7 stats par tirage')+'</strong></p><p>Valeurs regroupées : elles ne constituent pas '+a.n+' naissances indépendantes. Une distribution commune aux sept stats reste une hypothèse non démontrée.</p>'+(warning?'<p class="experiment-warning">'+warning+'</p>':'')+experimentComparisonHtml(d.aggregate_parent_comparisons)+'</div>';
+}
+function experimentGenerationNumbers(ctx){
+  const g=ctx.results.descriptive.generation_comparison;if(!g)return '';
+  return '<p class="experiment-generation-numbers" id="experimentGenerationNumbers">G0 : <strong>'+experimentDecimal(g.g0)+'</strong> | G1 : <strong>'+experimentDecimal(g.g1)+'</strong> | Δ : <strong>'+experimentSigned(g.delta)+'</strong></p>';
+}
+
 function experimentEstimateHtml(fit,bound){
   if(!fit)return '<p>Indéterminé : estimation commune non justifiée.</p>';
   const variation=BreedingMath.variations(bound);
@@ -2518,11 +2538,11 @@ function renderExperiment(){
     '<section class="experiment-section"><h2>Échantillon étudié — '+esc(label)+'</h2><div class="experiment-metrics"><div><strong>'+counts.individuals+'</strong><span>individus descendants observés</span></div><div><strong>'+counts.events+'</strong><span>événements capturés après regroupement</span></div><div><strong>'+counts.draws+'</strong><span>tirages distincts exploitables selon les liens connus</span></div><div><strong>'+counts.linkedTwins+'</strong><span>individus jumeaux supplémentaires reliés ('+counts.twinGroups+' groupes)</span></div><div><strong>'+counts.uncertainEvents+'</strong><span>événements incertains exclus</span></div></div><p>'+counts.analysable+' tirages fournissent au moins une stat analysable. Un jumeau sans lien explicite peut rester non reconnu : '+counts.linkedTwins+' jumeaux reliés ne prouve pas l’absence d’autres jumeaux.</p>'+(ctx.results.quality.possible_unassigned.length?'<p class="experiment-warning">'+ctx.results.quality.possible_unassigned.length+' individus à association possible mais non démontrée, hors de cet échantillon. Ils sont identifiés dans les analyses avancées.</p>':'')+'</section>'+
     '<section class="experiment-section"><h2>Ce que nous avons appris — '+esc(label)+'</h2><div class="experiment-lessons">'+ctx.summary.findings.map(l=>'<article class="experiment-card"><h3>'+esc(l.kind)+'</h3><p>'+esc(l.text)+'</p></article>').join('')+'</div><p>Talents Genetics supposés constants ; ces constats ne déterminent pas les probabilités vanilla.</p></section>'+
     (controlled?'<section class="experiment-section"><h2>Prochaine expérience</h2>'+(running&&!complete?'<p>Continuer ce couple : '+progress+' / '+target+' tirages analysables. Compléter l’échantillon ne confirme pas à lui seul un modèle.</p>':'')+'<div class="experiment-pair">'+experimentParentHtml(next.female,'Female',next.maternal)+experimentParentHtml(next.male,'Male',next.paternal)+'</div><p>'+esc(next.reason)+'</p>'+action('experimentNext','Préparer ce croisement',!next.female||!next.male?'Créer les reproducteurs indiqués avec Rada et attendre leur apparition dans le JSON.':'')+'</section>':'')+
-    '<section class="experiment-section"><h2>Total génétique par génération — '+esc(label)+'</h2><p>Somme V/F/P/R/T/A/I de 0 à 70. Points : un total complet par tirage ; ligne : moyenne descriptive.</p>'+(controlled&&generations.filter(g=>g.generation!==null).length===1?'<p>Cette expérience ne couvre qu’une génération. L’évolution entre générations ne peut pas encore être étudiée.</p>':'')+experimentSumGraph(ctx.results.totals,generations)+'</section>'+
-    '<section class="experiment-section"><h2>Sept distributions — '+esc(label)+'</h2><p>Valeurs de 0 à 10 ; nombres au-dessus des barres : effectifs réels. Un groupe gémellaire fiable compte une fois. Chaque histogramme affiche son propre nombre de valeurs disponibles.</p><div class="experiment-charts" id="experimentMainHistograms">'+BreedingMath.keys.map((_,i)=>experimentHistogram(ctx.results.histograms[i].counts,i)).join('')+'</div></section>'+
-    '<section class="experiment-section"><h2>Bloodlines — '+esc(label)+'</h2><p>'+blood.n+' tirages exploitables et '+blood.excluded+' événements exclus. Aucun héritage limité aux parents n’est présupposé.</p>'+experimentTable(['Observation','Effectif','Fréquence observée'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'</section>'+
+    '<section class="experiment-section"><div class="experiment-chart-heading"><h2>Total génétique par génération — '+esc(label)+'</h2>'+experimentGenerationNumbers(ctx)+'</div><p>Somme V/F/P/R/T/A/I de 0 à 70. Points : un total complet par tirage ; ligne : moyenne descriptive. G0 : moyenne des totaux des deux parents fondateurs ; G1 : moyenne des totaux complets de leurs descendants G1, un poids par tirage fiable.</p>'+(controlled&&generations.filter(g=>g.generation!==null).length===1?'<p>Cette expérience ne couvre qu’une génération. L’évolution entre générations ne peut pas encore être étudiée.</p>':'')+experimentSumGraph(ctx.results.totals,generations)+'</section>'+
+    '<section class="experiment-section"><h2>Sept distributions — '+esc(label)+'</h2><p>Valeurs de 0 à 10 ; nombres au-dessus des barres : effectifs réels. Un groupe gémellaire fiable compte une fois. Chaque histogramme affiche son propre nombre de valeurs disponibles.</p>'+(controlled?'<label class="experiment-checkbox"><input id="experimentGroupDistributions" type="checkbox"'+(experimentGrouped?' checked':'')+'> Regrouper les 7 distributions</label>':'')+'<div class="experiment-charts'+(controlled&&experimentGrouped?' is-aggregated':'')+'" id="experimentMainHistograms">'+experimentDistributionHtml(ctx,controlled&&experimentGrouped)+'</div><p>Inférieure et supérieure sont des comparaisons strictes ; égale reste distincte. Chaque parent a son propre effectif de valeurs exploitables. Les écarts observés ne prouvent pas des mutations ni un mécanisme d’héritage.</p></section>'+
+    '<section class="experiment-section"><h2>Bloodlines — '+esc(label)+'</h2><p>'+blood.n+' tirages exploitables et '+blood.excluded+' événements exclus. Aucun héritage limité aux parents n’est présupposé.</p>'+experimentTable(['Bloodline','Effectif','Fréquence'],ctx.results.descriptive.bloodline_display.rows.map(r=>[esc(r.label),r.count+' / '+r.n,experimentPercent(r.frequency)]))+(ctx.results.descriptive.bloodline_display.note?'<p class="small">'+esc(ctx.results.descriptive.bloodline_display.note)+'</p>':'')+'</section>'+
     '<section class="experiment-section"><h2>Partager les résultats</h2><p>Publier l’expérience primaire sélectionnée, toutes les expériences conservées, l’historique indépendant et les observations originales. Ouvrir l’historique ne remplace pas l’expérience primaire. Destination privée : research/genetics/latest.json.</p><button class="control" id="experimentPublish"'+(experimentPublishing?' disabled title="Publication en cours"':'')+'>Publier sur GitHub</button><p id="experimentPublishState" role="status"></p></section>'+
-    '<details id="experimentAdvanced" class="experiment-advanced"'+(experimentAdvancedOpen?' open':'')+'><summary>Analyses avancées et observations individuelles</summary><p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
+    '<details id="experimentAdvanced" class="experiment-advanced"'+(experimentAdvancedOpen?' open':'')+'><summary>Analyses avancées et observations individuelles</summary>'+experimentTable(['Bloodlines : détail méthodologique','Effectif','Fréquence'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'<p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
     '<section class="experiment-section"><h2>Inheritance Analysis</h2><p>Deux deltas sont conservés. La compatibilité tient compte du plafonnement 0–10 : un delta affiché nul peut cacher plusieurs variations latentes. Les données parentales manquantes restent inconnues.</p>'+
     events.map(e=>'<details class="experiment-birth"><summary>'+esc(canonicalName(e.pet.name))+' — '+esc(e.pet.sex||'Inconnu')+' — '+esc(e.pet.bt_id)+' · '+(e.generation===null?'Génération inconnue':'G'+e.generation)+'</summary>'+rowIdentity(e)+experimentTable(['Stat','Père','Mère','Enfant','DeltaFather','DeltaMother','Classification ±'+bound],BreedingMath.keys.map((key,i)=>{
       const o=BreedingMath.observations([e],i,bound)[0];return [key,experimentNumber(e.paternal[i]),experimentNumber(e.maternal[i]),experimentNumber(e.child[i]),experimentNumber(o.df),experimentNumber(o.dm),{father:'Compatible père uniquement',mother:'Compatible mère uniquement',both:'Compatible avec les deux (ambigu)',neither:'Incompatible avec les deux',unknown:'Non analysable'}[o.kind]];
@@ -2543,6 +2563,7 @@ function renderExperiment(){
       BreedingMath.captureFlags(r).map(esc).join('<br>')+(r.parentEvidence==='controlled_record'?'<br>BT_ID parentaux déjà capturés dans l’enregistrement contrôlé : '+esc(r.motherId)+' / '+esc(r.fatherId)+' (parenté originale conservée ci-contre).':'')+'<br>Père : '+esc(experimentGenes(r.paternal))+'<br>Mère : '+esc(experimentGenes(r.maternal))+(e.conflict.some(Boolean)?'<br><span class="experiment-warning">Stats gémellaires contradictoires exclues.</span>':'')
     ])))+'</section>'+ (ctx.results.quality.possible_unassigned.length?'<section class="experiment-section"><h2>Captures possibles hors de l’échantillon contrôlé</h2><p>Ces individus ne participent à aucun résultat de cette expérience. Un parent connu correspond, ce qui ne démontre ni l’autre filiation, ni une naissance dans cette série.</p>'+ctx.results.quality.possible_unassigned.map(r=>experimentPetHtml(data.byId.get(r.bt_id))).join('')+'</section>':'')+'</details>';
 
+  document.getElementById('experimentGroupDistributions')?.addEventListener('change',e=>{experimentGrouped=e.target.checked;const el=document.getElementById('experimentMainHistograms');el.classList.toggle('is-aggregated',experimentGrouped);el.innerHTML=experimentDistributionHtml(ctx,experimentGrouped)});
   document.getElementById('experimentControlled').onclick=()=>{experimentMode='controlled';renderExperiment()};
   document.getElementById('experimentHistory').onclick=()=>{experimentMode='global';renderExperiment()};
   document.getElementById('experimentSelected')?.addEventListener('change',e=>{state.selectedExperimentId=e.target.value;saveExperiment();renderExperiment()});
@@ -2629,20 +2650,39 @@ function openExperimentPublication(){
   const snapshot=experimentExport(),context=experimentContext;
   document.getElementById('experimentPublishSummary').textContent=snapshot.raw_data.observations.length+' individus descendants et '+snapshot.experiments.length+' expériences. Référence primaire : '+(snapshot.selected_experiment?.id||'aucune')+'. Le contexte global reste séparé. Les données seront relues lors de la confirmation.';
   document.getElementById('experimentPublishConfirm').disabled=true;dialog.showModal();
-  const input=document.getElementById('experimentGithubToken');
+  const input=document.getElementById('experimentGithubToken'),remember=document.getElementById('experimentRememberGithubToken'),forget=document.getElementById('experimentForgetGithubToken'),storageState=document.getElementById('experimentGithubStorageState');
+  const tokenKey='breeding-advisor-github-token';
+  let storageAvailable=location.protocol==='http:'||location.protocol==='https:';
+  remember.disabled=!storageAvailable;
+  if(!storageAvailable)storageState.textContent='Mémorisation non proposée en file:// : persistance non garantie. Ouvrir sur une adresse locale stable ou utiliser un gestionnaire de mots de passe.';
+  else try{const saved=localStorage.getItem(tokenKey);if(saved){input.value=saved;remember.checked=true}storageState.textContent=saved?'Jeton mémorisé sur cette origine du navigateur.':'Le jeton reste temporaire tant que cette option est désactivée.'}
+  catch{storageAvailable=false;remember.disabled=true;storageState.textContent='Stockage local indisponible. Utiliser un gestionnaire de mots de passe ; la publication ponctuelle reste disponible.'}
+  const forgetStored=()=>{
+    try{localStorage.removeItem(tokenKey);if(localStorage.getItem(tokenKey)!==null)throw new Error();storageState.textContent='Jeton oublié sur cette origine.';return true}
+    catch{storageState.textContent='Effacement non confirmé. Supprimer les données de cette origine dans les paramètres du navigateur.';return false}
+  };
+  remember.onchange=()=>{if(!remember.checked)forgetStored();else storageState.textContent='Le jeton sera mémorisé lors de la confirmation de publication.'};
+  forget.onclick=()=>{input.value='';remember.checked=false;forgetStored();document.getElementById('experimentPublishConfirm').disabled=true};
+  document.getElementById('experimentPublishConfirm').disabled=!input.value.trim();
   input.oninput=()=>{document.getElementById('experimentPublishConfirm').disabled=!input.value.trim()};
   document.getElementById('experimentPublishCancel').onclick=()=>{input.value='';dialog.close()};
   dialog.oncancel=()=>{input.value=''};
   dialog.onclose=()=>{input.value='';form.onsubmit=null};
   form.onsubmit=async event=>{
-    event.preventDefault();let token=input.value.trim();if(!token||experimentPublishing)return;input.value='';dialog.close();
+    event.preventDefault();let token=input.value.trim();if(!token||experimentPublishing)return;
+    let storageNotice='';
+    if(storageAvailable&&remember.checked){
+      try{localStorage.setItem(tokenKey,token);if(localStorage.getItem(tokenKey)!==token)throw new Error()}
+      catch{remember.checked=false;storageNotice=' Mémorisation non confirmée : utiliser un gestionnaire de mots de passe.'}
+    }
+    input.value='';dialog.close();
     if(context!==experimentContext){token='';experimentPublishResult={text:'Publication annulée : le compte ou le monde a changé. Rouvrir la publication.'};showExperimentPublication();return}
     const publication=experimentExport();experimentPublishing=true;
     if(context===experimentContext){experimentPublishResult={text:'Publication en cours…'};showExperimentPublication();document.getElementById('experimentPublish').disabled=true}
     try{
       await publishExperimentGithub(publication,token);
-      if(context===experimentContext)experimentPublishResult={success:true,text:'Publication réussie — latest.json a été remplacé dans le dépôt privé.'};
-    }catch(error){if(context===experimentContext)experimentPublishResult={text:error.message}}
+      if(context===experimentContext)experimentPublishResult={success:true,text:'Publication réussie — latest.json a été remplacé dans le dépôt privé.'+storageNotice};
+    }catch(error){if(context===experimentContext)experimentPublishResult={text:error.message+storageNotice}}
     finally{token='';experimentPublishing=false;if(context===experimentContext)showExperimentPublication();const button=document.getElementById('experimentPublish');if(button)button.disabled=false}
   };
 }
