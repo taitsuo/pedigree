@@ -571,21 +571,34 @@ svg{display:block;min-width:100%;}
   --material-frame:none;
 }
 
-/* Experiment P1: inherits the existing theme without affecting Advisor or Board. */
+/* Experiment P2 uses the existing theme and shared controls. */
 .experiment-wrap{padding:20px;color:var(--text)}
 .experiment-wrap[hidden]{display:none}
 .experiment-wrap p{line-height:1.6;color:var(--muted)}
 .experiment-wrap input{width:90px}
-.experiment-card{margin:18px 0;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
-.experiment-pair{display:flex;flex-wrap:wrap;gap:18px}
-.experiment-parent{flex:1;min-width:220px;display:grid;gap:7px}
+.experiment-wrap select{max-width:100%}
+.experiment-section{padding:16px 0;border-bottom:1px solid var(--border)}
+.experiment-section h2{margin-top:0}
+.experiment-card,.experiment-chart{margin:14px 0;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
+.experiment-pair,.experiment-controls{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0}
+.experiment-pair>*{flex:1;min-width:240px}
+.experiment-controls label{max-width:100%}
+.experiment-pet,.experiment-estimate{display:grid;gap:6px;min-width:240px;overflow-wrap:anywhere}
+.experiment-pet span,.experiment-estimate span{font-size:12px}
 .experiment-warning,.experiment-wrap p.experiment-warning{color:#e6ae76}
 .experiment-wrap progress{width:100%;accent-color:var(--active)}
-.experiment-histogram{display:flex;gap:6px;align-items:end;padding:12px 0;border-bottom:1px solid var(--border)}
-.experiment-bin{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:165px;gap:6px;font-size:12px}
+.experiment-wrap details{padding:12px 0}
+.experiment-wrap summary{cursor:pointer;line-height:1.6}
+.experiment-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
+.experiment-chart h3{font-size:14px}
+.experiment-histogram{display:flex;gap:4px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border)}
+.experiment-bin{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:145px;gap:6px;font-size:12px}
 .experiment-bar{width:80%;min-height:1px;background:var(--active)}
-.experiment-table-scroll{overflow:auto;max-height:450px}
+.experiment-table-scroll{overflow:auto;max-height:520px;margin:12px 0}
 .experiment-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
-.experiment-table td,.experiment-table th{padding:9px;border-bottom:1px solid var(--border)}
-.experiment-table th{position:sticky;top:0;background:var(--panel)}
+.experiment-table td,.experiment-table th{padding:9px;border-bottom:1px solid var(--border);vertical-align:top}
+.experiment-table th{position:sticky;top:0;background:var(--panel);z-index:1}
+.experiment-sum-chart{display:block;width:100%;max-width:850px;color:var(--muted);background:var(--card);border:1px solid var(--border)}
+.experiment-sum-chart circle{fill:var(--active);opacity:.6}
+.experiment-sum-chart text{fill:currentColor;font-size:12px}
 #experimentSendState{display:inline-block;margin:8px}
