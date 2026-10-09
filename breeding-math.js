@@ -53,10 +53,11 @@ const BreedingMath = (()=>{
       const r=root(p),record=records[p.bt_id];
       const recorded=record&&record.femaleId===p.mother_bt_id&&record.maleId===p.father_bt_id;
       const child=genetics(p),cg=recorded?record.child:child;
-      return {pet:p,mother:byId.get(p.mother_bt_id)||null,father:byId.get(p.father_bt_id)||null,
+      const mother=byId.get(validId(p.mother_bt_id))||null,father=byId.get(validId(p.father_bt_id))||null;
+      return {pet:p,mother,father,
         key:pairKey(p.mother_bt_id,p.father_bt_id),drawId:r.id,twinIssue:r.issue,generation:generation(p.bt_id),
-        child:cg,maternal:recorded?record.maternal:keys.map(()=>null),paternal:recorded?record.paternal:keys.map(()=>null),
-        sessionId:recorded?record.sessionId:null,provenance:recorded?record.reason:'Historique : valeurs parentales à la naissance non enregistrées',
+        child:cg,maternal:genetics(mother),paternal:genetics(father),
+        sessionId:recorded?record.sessionId:null,
         childChanged:recorded&&child.some((v,i)=>numeric(v)&&numeric(cg[i])&&v!==cg[i])};
     });
     const groups=new Map();
@@ -236,7 +237,8 @@ const BreedingMath = (()=>{
     }
     const full=v=>keys.map(()=>v),candidates=[candidate(full(8),full(2),'initial'),candidate(full(2),full(8),'reverse'),candidate(full(5),full(5),'variation')];
     const series=state.series;
-    if(series&&!series.legacy&&series.maternal.every(numeric)&&series.paternal.every(numeric))candidates.push(candidate(series.paternal,series.maternal,'reverse'));
+    const maternal=genetics(data.byId.get(series?.femaleId)),paternal=genetics(data.byId.get(series?.maleId));
+    if(series&&maternal.every(numeric)&&paternal.every(numeric))candidates.push(candidate(paternal,maternal,'reverse'));
     const females=data.breeders.filter(p=>p.sex==='Female'&&genetics(p).every(numeric)),males=data.breeders.filter(p=>p.sex==='Male'&&genetics(p).every(numeric));
     for(const f of females)for(const m of males)if(!candidates.some(c=>same(c.maternal,genetics(f))&&same(c.paternal,genetics(m))))candidates.push(candidate(genetics(f),genetics(m),'existing'));
     const contradiction=analysis.counts.neither>0||analysis.stats.some(s=>s.alternativeContradictions>0);
