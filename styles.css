@@ -570,3 +570,22 @@ svg{display:block;min-width:100%;}
   --material-surface:none;
   --material-frame:none;
 }
+
+/* Experiment P1: inherits the existing theme without affecting Advisor or Board. */
+.experiment-wrap{padding:20px;color:var(--text)}
+.experiment-wrap[hidden]{display:none}
+.experiment-wrap p{line-height:1.6;color:var(--muted)}
+.experiment-wrap input{width:90px}
+.experiment-card{margin:18px 0;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
+.experiment-pair{display:flex;flex-wrap:wrap;gap:18px}
+.experiment-parent{flex:1;min-width:220px;display:grid;gap:7px}
+.experiment-warning,.experiment-wrap p.experiment-warning{color:#e6ae76}
+.experiment-wrap progress{width:100%;accent-color:var(--active)}
+.experiment-histogram{display:flex;gap:6px;align-items:end;padding:12px 0;border-bottom:1px solid var(--border)}
+.experiment-bin{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:165px;gap:6px;font-size:12px}
+.experiment-bar{width:80%;min-height:1px;background:var(--active)}
+.experiment-table-scroll{overflow:auto;max-height:450px}
+.experiment-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
+.experiment-table td,.experiment-table th{padding:9px;border-bottom:1px solid var(--border)}
+.experiment-table th{position:sticky;top:0;background:var(--panel)}
+#experimentSendState{display:inline-block;margin:8px}
