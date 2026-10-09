@@ -158,6 +158,18 @@
 <div class="tooltip" id="tooltip"></div>
 <input id="jsonFileFallback" type="file" accept="application/json,.json" hidden>
 
+<dialog id="experimentPublishDialog" class="experiment-publish-dialog" aria-labelledby="experimentPublishTitle">
+  <form id="experimentPublishForm" autocomplete="off">
+    <h2 id="experimentPublishTitle">Publier les résultats sur GitHub</h2>
+    <p>Dépôt privé <strong>taitsuo/chatgpt-icarus</strong>, branche <strong>main</strong>.<br>Le fichier <strong>research/genetics/latest.json</strong> sera remplacé.</p>
+    <p id="experimentPublishSummary"></p>
+    <p>Créer un <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">jeton personnel à permissions fines</a> : propriétaire taitsuo, uniquement le dépôt chatgpt-icarus, permission <strong>Contents: Read and write</strong>. Metadata en lecture est ajoutée par GitHub. Choisir une expiration courte. Les droits portent sur le dépôt, pas uniquement sur ce fichier.</p>
+    <label for="experimentGithubToken">Jeton GitHub (utilisé pour cet envoi uniquement)</label>
+    <input class="control" id="experimentGithubToken" type="password" autocomplete="off" spellcheck="false" required>
+    <p>Le jeton n’est ni enregistré, ni exporté, ni journalisé. Les Steam ID, identifiants de compte et données runtime inutiles sont exclus de l’export.</p>
+    <div class="experiment-actions"><button class="control" type="button" id="experimentPublishCancel">Annuler</button><button class="control primary-control" id="experimentPublishConfirm" type="submit" disabled>Publier et remplacer latest.json</button></div>
+  </form>
+</dialog>
 <script src="breeding-math.js"></script>
 <script src="stores.js"></script>
 <script src="data.js"></script>

@@ -602,3 +602,20 @@ svg{display:block;min-width:100%;}
 .experiment-sum-chart circle{fill:var(--active);opacity:.6}
 .experiment-sum-chart text{fill:currentColor;font-size:12px}
 #experimentSendState{display:inline-block;margin:8px}
+
+/* Experiment P3: readable conclusions, explicit actions and secondary detail. */
+.experiment-wrap [hidden]{display:none!important}
+.experiment-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
+.experiment-metrics>div{display:grid;gap:6px;padding:14px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
+.experiment-metrics strong{font-size:22px}.experiment-metrics span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.experiment-actions{display:flex;align-items:start;flex-wrap:wrap;gap:14px;margin:12px 0}
+.experiment-action{display:grid;gap:6px;max-width:280px}.experiment-action small{color:var(--muted);line-height:1.5}
+.experiment-lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.experiment-lessons .experiment-card{margin:0}.experiment-lessons h3{font-size:15px;margin:0 0 8px}.experiment-lessons p{margin:0}
+.experiment-advanced{margin-top:20px;border:1px solid var(--border);border-radius:6px;padding:16px!important}
+.experiment-advanced>summary{font-size:17px;font-weight:600}.experiment-advanced .experiment-section{padding:20px 0}
+.experiment-publish-dialog{max-width:620px;width:calc(100% - 48px);max-height:85vh;overflow:auto;padding:24px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px}
+.experiment-publish-dialog::backdrop{background:#0009}.experiment-publish-dialog p{color:var(--muted);line-height:1.6}
+.experiment-publish-dialog label{display:block;margin-bottom:8px}.experiment-publish-dialog input{box-sizing:border-box;width:100%}
+.experiment-publish-dialog a{color:var(--active)}
+@media(max-width:640px){.experiment-wrap{padding:12px}.experiment-pair>*{min-width:0;flex-basis:100%}.experiment-lessons{grid-template-columns:1fr}.experiment-controls label{display:grid;gap:6px}}

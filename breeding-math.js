@@ -255,5 +255,62 @@ const BreedingMath = (()=>{
     if(next.female&&next.male){const gs=[data.generations.get(next.female.bt_id),data.generations.get(next.male.bt_id)];if(gs.some(g=>g>0))next.reason+=' Reproducteurs descendants : comparer aussi avec les générations précédentes.'}
     return next;
   }
-  return Object.freeze({keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});
+
+  // Capture diagnostics never infer a missing parent or a twin from matching genetics.
+  function captureFlags(row){
+    const flags=[];
+    if(!row.pet.mother_bt_id||!row.pet.father_bt_id)flags.push('Parenté incomplète : vérifier la capture (jumeau possible, non confirmé).');
+    else if(!row.mother||!row.father)flags.push('Parent introuvable par BT_ID.');
+    if(row.pet.mother_bt_id&&row.pet.mother_bt_id===row.pet.father_bt_id)flags.push('Même BT_ID pour les deux parents.');
+    if(row.twinIssue)flags.push('Lien twin_source non résolu ou incohérent.');
+    return flags;
+  }
+  function reliableEvent(e){return !e.twinIssue&&e.members.every(r=>!captureFlags(r).length)}
+  function captureSummary(events,bound=3){
+    const rows=events.flatMap(e=>e.members),reliable=events.filter(reliableEvent);
+    return {individuals:rows.length,draws:reliable.length,
+      analysable:reliable.filter(e=>keys.some((_,i)=>observations([e],i,bound)[0].kind!=='unknown')).length,
+      twinGroups:reliable.filter(e=>e.members.length>1).length,
+      linkedTwins:reliable.reduce((n,e)=>n+Math.max(0,e.members.length-1),0),
+      uncertain:rows.filter(r=>captureFlags(r).length).length,
+      conflicting:events.filter(e=>e.conflict.some(Boolean)).length};
+  }
+  function bloodlines(events){
+    const counts={father:0,mother:0,other:0,same:0,sameOther:0};let excluded=0;
+    const value=p=>typeof p?.lineage==='string'&&p.lineage.trim()&&!/^(unknown|inconnu|inconnue)$/i.test(p.lineage.trim())?p.lineage.trim():null;
+    for(const e of events){
+      const f=value(e.father),m=value(e.mother),children=e.members.map(r=>value(r.pet));
+      if(!reliableEvent(e)||!f||!m||children.some(c=>!c)||new Set(children).size!==1){excluded++;continue}
+      const c=children[0];counts[f===m?(c===f?'same':'sameOther'):c===f?'father':c===m?'mother':'other']++;
+    }
+    const n=Object.values(counts).reduce((a,b)=>a+b,0);
+    return {n,excluded,counts,frequencies:Object.fromEntries(Object.entries(counts).map(([k,v])=>[k,n?v/n:null]))};
+  }
+  function lessons(events,bound=3,analysis=analyze(events,bound)){
+    const capture=captureSummary(events,bound),lines=[];
+    if(!analysis.births)return [{kind:'Données insuffisantes',text:'Aucun tirage avec enfant et deux valeurs parentales exploitables. Les captures incomplètes restent visibles dans les observations.'}];
+    let df=0,dm=0,da=0,distanceN=0,furthest=0,exact=[],contradictionsA=new Set(),contradictionsB=new Set();
+    for(const e of events){
+      const known=keys.map((_,i)=>observations([e],i,bound)[0]).filter(o=>o.kind!=='unknown');
+      if(!known.length)continue;
+      const mean=fn=>known.reduce((n,o)=>n+fn(o),0)/known.length;
+      df+=mean(o=>Math.abs(o.c-o.f));dm+=mean(o=>Math.abs(o.c-o.m));da+=mean(o=>Math.abs(o.c-(o.f+o.m)/2));distanceN++;
+      for(const o of known){
+        furthest=Math.max(furthest,Math.min(Math.abs(o.df),Math.abs(o.dm)));
+        if(o.f===o.m&&o.c>0&&o.c<10)exact.push(o.c-o.f);
+        if(o.kind==='neither')contradictionsA.add(e.drawId);
+        if(!o.alternative)contradictionsB.add(e.drawId);
+      }
+    }
+    const distances=[df,dm,da].map(n=>n/distanceN),labels=['du père','de la mère','de la moyenne parentale'];
+    const minimum=Math.min(...distances),closest=labels.filter((_,i)=>Math.abs(distances[i]-minimum)<1e-8);
+    lines.push({kind:'Observation',text:'Sur '+distanceN+' tirages, les descendants sont en moyenne les plus proches '+closest.join(' et ')+'. Écart absolu moyen : père '+distances[0].toFixed(2)+', mère '+distances[1].toFixed(2)+', moyenne '+distances[2].toFixed(2)+' points par stat disponible. Chaque naissance a le même poids ; cette proximité ne révèle pas le parent choisi.'});
+    lines.push({kind:'Variation observée',text:'Le plus grand écart au parent le plus proche est de '+furthest+' points. Il constitue une amplitude minimale nécessaire au modèle parental, pas une mutation attribuée.'+(exact.length?' Avec des parents de même valeur et un enfant hors des bornes 0/10, les écarts observés vont de '+Math.min(...exact)+' à '+Math.max(...exact)+' ('+exact.length+' valeurs de stats).':' L’origine parentale ambiguë et le plafonnement à 0/10 empêchent de mesurer toutes les variations réelles.')});
+    const b=analysis.stats.reduce((n,s)=>n+s.alternativeContradictions,0);
+    lines.push({kind:analysis.counts.neither||b?'Hypothèses contredites':'Hypothèses compatibles à ce stade',text:'Avec la borne supposée ±'+bound+', sélection parentale + variation : '+analysis.counts.neither+' valeurs impossibles sur '+analysis.n+' ('+contradictionsA.size+' tirages). Moyenne arrondie + variation : '+b+' valeurs impossibles ('+contradictionsB.size+' tirages).'+(!analysis.counts.neither&&!b?' Les deux modèles expliquent encore toutes ces observations ; aucun n’est confirmé.':analysis.counts.neither&&b?' Les deux modèles rencontrent des contre-exemples : revoir leurs règles, sans forcer les données.':' Le modèle sans contre-exemple reste seulement compatible avec les données.')});
+    lines.push({kind:'Questions ouvertes',text:analysis.births<20?'Seulement '+analysis.births+' tirages analysables : compléter l’échantillon. Vingt tirages ne garantissent pas de distinguer les modèles.': 'Les '+analysis.births+' tirages fournissent '+analysis.n+' valeurs de stats, pas '+analysis.n+' naissances indépendantes. '+(analysis.stats.some(s=>s.estimate.p!==null)?'Certaines préférences parentales sont estimables, mais restent exploratoires ; consulter les estimations avancées.':'La préférence père/mère reste indéterminée avec ces données.')+' Inverser les valeurs parentales et tester des parents identiques aide à séparer préférence et variation.'});
+    if(capture.uncertain||capture.conflicting)lines.push({kind:'Captures à vérifier',text:capture.uncertain+' individus à parenté ou lien gémellaire incertain ; '+capture.conflicting+' événements avec des stats gémellaires contradictoires. Les valeurs concernées sont exclues des estimations ; aucun lien manquant n’est inventé.'});
+    return lines;
+  }
+  return Object.freeze({captureFlags,reliableEvent,captureSummary,bloodlines,lessons,keys,names,numeric,genetics,sum,pairKey,clamp,variations,same,possible,classify,collect,fit,analyze,observations,histogram,totals,generationSummary,seriesEvents,recommend});
 })();
