@@ -641,3 +641,13 @@ svg{display:block;min-width:100%;}
 .experiment-exclusions select,.experiment-exclusions textarea{width:100%;box-sizing:border-box}.experiment-exclusions label{display:grid;gap:8px;margin:12px 0}.experiment-exclusions .experiment-pet{margin:12px 0}
 
 .experiment-metadata{display:grid;gap:12px;margin:16px 0}.experiment-metadata label{display:grid;gap:8px;font-weight:600}.experiment-metadata input,.experiment-metadata textarea{box-sizing:border-box;width:100%}.experiment-metadata textarea{resize:vertical;min-height:100px;white-space:pre-wrap}
+
+/* The lab is scoped to Experiment; legacy charts and other views retain their styles. */
+.hypothesis-average{grid-column:1/-1;overflow:hidden}.hypothesis-average svg{display:block;width:100%;height:auto;max-height:420px}.hypothesis-average svg text{fill:var(--text);font-size:11px}.hypothesis-average svg line{stroke:var(--border);stroke-width:1}.hyp-observed{fill:var(--active)}.hyp-predicted{fill:#db9e55}.hyp-legend{display:flex;flex-wrap:wrap;gap:18px}.hyp-legend span:first-child{color:var(--active)}.hyp-legend span:last-child{color:#db9e55}
+.hypothesis-lab{margin:18px 0;padding:14px;border:1px solid var(--border);border-radius:6px;overflow-wrap:anywhere}.hypothesis-lab>summary{font-size:17px;font-weight:600;cursor:pointer}.hyp-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;align-items:start}.hypothesis-lab label{display:grid;gap:6px;margin:10px 0;min-width:0}.hypothesis-lab input,.hypothesis-lab textarea,.hypothesis-lab select{width:100%;box-sizing:border-box;min-width:0;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:8px}.hypothesis-lab textarea{resize:vertical;font-family:monospace}.hypothesis-lab button{color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:8px;cursor:pointer}.hypothesis-lab [data-hyp-status]{white-space:pre-wrap}
+@media(min-width:1600px){#experimentMainHistograms:not(.is-aggregated){grid-template-columns:repeat(5,minmax(0,1fr))}#experimentMainHistograms:not(.is-aggregated) .hypothesis-average{grid-column:span 3}}
+@media(max-width:640px){#experimentMainHistograms{grid-template-columns:minmax(0,1fr)}.hypothesis-average{padding:8px}.hypothesis-lab{padding:10px}}
+
+.hypothesis-average pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+
+.hypothesis-average svg .hyp-observed-label{fill:var(--active)}.hypothesis-average svg .hyp-predicted-label{fill:#db9e55}
