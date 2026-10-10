@@ -639,3 +639,5 @@ svg{display:block;min-width:100%;}
 .experiment-charts.is-aggregated .experiment-comparisons{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 
 .experiment-exclusions select,.experiment-exclusions textarea{width:100%;box-sizing:border-box}.experiment-exclusions label{display:grid;gap:8px;margin:12px 0}.experiment-exclusions .experiment-pet{margin:12px 0}
+
+.experiment-metadata{display:grid;gap:12px;margin:16px 0}.experiment-metadata label{display:grid;gap:8px;font-weight:600}.experiment-metadata input,.experiment-metadata textarea{box-sizing:border-box;width:100%}.experiment-metadata textarea{resize:vertical;min-height:100px;white-space:pre-wrap}
