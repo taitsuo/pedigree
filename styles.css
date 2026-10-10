@@ -667,3 +667,5 @@ svg{display:block;min-width:100%;}
 /* Keep the budget comparison readable inside its horizontal scroll area. */
 [data-hyp-budget-evaluation] .experiment-table{min-width:850px}
 [data-hyp-budget-evaluation] .experiment-table th{min-width:95px}
+
+.hypothesis-average .hyp-observed{fill:#83b876}.hypothesis-average .hyp-observed-label{fill:#83b876}.hypothesis-average .hyp-legend span:first-child{color:#83b876}

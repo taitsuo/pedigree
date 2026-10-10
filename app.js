@@ -2591,6 +2591,22 @@ function renderExperimentBudgetDistribution(ctx){
   };draw();
 }
 
+
+// Resolve selected parent IDs directly from the census, including archived animals.
+// A projection never reconstructs parents from offspring events.
+function experimentHypothesisParents(ctx){
+  let motherId=null,fatherId=null;
+  if(ctx.type==='controlled_experiment'){
+    const series=experimentSessions().find(s=>s.id===ctx.experiment_id);
+    motherId=series?.femaleId||experimentSelection?.femaleId;fatherId=series?.maleId||experimentSelection?.maleId;
+  }else if(experimentScope.startsWith('pair:')){
+    try{[motherId,fatherId]=JSON.parse(experimentScope.slice(5))}catch{}
+  }
+  if(!motherId||!fatherId)return null;
+  const mother=experimentData.byId.get(motherId),father=experimentData.byId.get(fatherId);
+  return {mother:BreedingMath.genetics(mother),father:BreedingMath.genetics(father),motherId,fatherId,motherName:mother?.name||null,fatherName:father?.name||null};
+}
+
 function experimentViewContext(){
   const series=experimentSessions().find(s=>s.id===experimentState.selectedExperimentId)||null;
   const controlled=experimentMode==='controlled';
@@ -2669,7 +2685,7 @@ function renderExperiment(){
     });
   }
   document.getElementById('experimentExclude')?.addEventListener('click',()=>{if(series)openExperimentExclusions(series,ctx)});
-  document.getElementById('experimentGroupDistributions')?.addEventListener('change',e=>{experimentGrouped=e.target.checked;const el=document.getElementById('experimentMainHistograms');el.classList.toggle('is-aggregated',experimentGrouped);el.innerHTML=experimentDistributionHtml(ctx,experimentGrouped)+HypothesisLab.slot;HypothesisLab.mount(document.getElementById('hypothesisAverage'),document.getElementById('hypothesisLab'),ctx)});
+  document.getElementById('experimentGroupDistributions')?.addEventListener('change',e=>{experimentGrouped=e.target.checked;const el=document.getElementById('experimentMainHistograms');el.classList.toggle('is-aggregated',experimentGrouped);el.innerHTML=experimentDistributionHtml(ctx,experimentGrouped)+HypothesisLab.slot;HypothesisLab.mount(document.getElementById('hypothesisAverage'),document.getElementById('hypothesisLab'),ctx,experimentHypothesisParents(ctx))});
   document.getElementById('experimentControlled').onclick=()=>{experimentMode='controlled';renderExperiment()};
   document.getElementById('experimentHistory').onclick=()=>{experimentMode='global';renderExperiment()};
   document.getElementById('experimentSelected')?.addEventListener('change',e=>{state.selectedExperimentId=e.target.value;saveExperiment();renderExperiment()});
@@ -2694,7 +2710,7 @@ function renderExperiment(){
   });
 
   document.getElementById('experimentPublish').addEventListener('click',openExperimentPublication);showExperimentPublication();
-  HypothesisLab.mount(document.getElementById('hypothesisAverage'),document.getElementById('hypothesisLab'),ctx);
+  HypothesisLab.mount(document.getElementById('hypothesisAverage'),document.getElementById('hypothesisLab'),ctx,experimentHypothesisParents(ctx));
   renderExperimentBudgetDistribution(ctx);
   initializeExperimentBlocks();
 }
