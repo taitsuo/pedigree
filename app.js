@@ -213,7 +213,7 @@ const fatherClustersBtn=document.getElementById('fatherClustersBtn');
 let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=true,clusterParent='mother';
 const collapsedBlocks=new Map();
 
-function makeCollapsible(element,key,{keep=null,label='block'}={}){
+function makeCollapsible(element,key,{keep=null,label='block',onChange=null}={}){
   if(!element)return;
   element.classList.add('collapsible-block');
   const keepElement=keep?element.querySelector(`:scope > ${keep}`):null;
@@ -235,7 +235,7 @@ function makeCollapsible(element,key,{keep=null,label='block'}={}){
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-expanded',String(!collapsed));
   };
-  button.onclick=event=>{event.stopPropagation();collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync()};
+  button.onclick=event=>{event.stopPropagation();collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync();onChange?.(collapsedBlocks.get(key))};
   sync();
 }
 
@@ -408,34 +408,36 @@ function saveCurrentBlockOrder(){
   savePreferences();
 }
 
-function initializeBlockOrdering(){
+function initializeBlockOrdering(container=customizableBlocks,{apply=applyBlockOrder,save=saveCurrentBlockOrder}={}){
+  container.blockOrderingController?.abort();
+  const controller=new AbortController();container.blockOrderingController=controller;
   let dragged=null;
-  customizableBlocks.querySelectorAll('.block-drag-handle').forEach(handle=>{
+  container.querySelectorAll('.block-drag-handle').forEach(handle=>{
     handle.addEventListener('dragstart',event=>{
       dragged=handle.closest('[data-block-id]');
       dragged?.classList.add('block-dragging');
       event.dataTransfer.effectAllowed='move';
       event.dataTransfer.setData('text/plain',dragged?.dataset.blockId||'');
-    });
+    },{signal:controller.signal});
     handle.addEventListener('dragend',()=>{
-      customizableBlocks.querySelectorAll('.movable-block').forEach(block=>block.classList.remove('block-dragging','block-drop-target'));
-      if(dragged)saveCurrentBlockOrder();
+      container.querySelectorAll('.movable-block').forEach(block=>block.classList.remove('block-dragging','block-drop-target'));
+      if(dragged)save();
       dragged=null;
-    });
+    },{signal:controller.signal});
   });
-  customizableBlocks.addEventListener('dragover',event=>{
+  container.addEventListener('dragover',event=>{
     if(!dragged)return;
     event.preventDefault();event.dataTransfer.dropEffect='move';
     const candidate=event.target.closest('[data-block-id]');
-    const target=candidate?.parentElement===customizableBlocks?candidate:null;
-    customizableBlocks.querySelectorAll('.block-drop-target').forEach(block=>block.classList.remove('block-drop-target'));
+    const target=candidate?.parentElement===container?candidate:null;
+    container.querySelectorAll('.block-drop-target').forEach(block=>block.classList.remove('block-drop-target'));
     if(!target||target===dragged)return;
     target.classList.add('block-drop-target');
     const before=event.clientY<target.getBoundingClientRect().top+target.getBoundingClientRect().height/2;
-    customizableBlocks.insertBefore(dragged,before?target:target.nextSibling);
-  });
-  customizableBlocks.addEventListener('drop',event=>{if(dragged)event.preventDefault()});
-  applyBlockOrder();
+    container.insertBefore(dragged,before?target:target.nextSibling);
+  },{signal:controller.signal});
+  container.addEventListener('drop',event=>{if(dragged)event.preventDefault()},{signal:controller.signal});
+  apply();
 }
 
 function allSpeciesKeys(){
@@ -2543,6 +2545,52 @@ function experimentSumGraph(totals,generations){
     '<polyline points="'+means.map(g=>x(g.generation)+','+y(g.mean)).join(' ')+'" fill="none" stroke="var(--female)" stroke-width="2"/>'+
     known.map(g=>'<text x="'+x(g.generation)+'" y="238" text-anchor="middle">G'+g.generation+'</text>').join('')+'</svg><p>Points : un total par naissance indépendante ; ligne : moyenne descriptive. Une hausse peut provenir de la sélection des reproducteurs, sans prouver une mutation positive ou un effet de génération.</p>';
 }
+
+// Experiment presentation preferences are independent of scientific state and other tabs.
+const experimentLayoutKey='breeding-advisor-experiment-layout-v1';
+let experimentLayout={order:[],collapsed:{}};
+try{const saved=JSON.parse(localStorage.getItem(experimentLayoutKey));if(saved&&Array.isArray(saved.order)&&saved.collapsed&&typeof saved.collapsed==='object')experimentLayout=saved}catch{}
+function initializeExperimentBlocks(){
+  const ids=['context','presentation','sample','totals','distributions','hypotheses','bloodlines','publication','advanced'];
+  const names=['Contexte','Présentation','Échantillon','Totaux','Distributions','Hypothesis Lab','Bloodlines','Publication','Analyses avancées'];
+  const sections=[...experimentWrap.children];
+  // History has no controlled presentation; stable IDs must not depend on visible positions.
+  let index=0;
+  const save=()=>{try{localStorage.setItem(experimentLayoutKey,JSON.stringify(experimentLayout));const old=document.getElementById('experimentLayoutMessage');old?.remove()}catch{let message=document.getElementById('experimentLayoutMessage');if(!message){message=document.createElement('p');message.id='experimentLayoutMessage';experimentWrap.appendChild(message)}message.textContent='Disposition en mémoire seulement : stockage local indisponible.'}};
+  for(const section of sections){
+    if(index===1&&!section.querySelector('#experimentChoose'))index++;
+    const id=ids[index++];if(!id)continue;
+    section.dataset.blockId=id;section.classList.add('movable-block','experiment-movable');
+    let heading=section.querySelector(':scope > .experiment-chart-heading')||section.querySelector(':scope > h2');
+    if(!heading)continue;
+    heading.classList.add('experiment-block-heading');
+    const handle=document.createElement('button');handle.type='button';handle.className='block-drag-handle';handle.draggable=true;handle.textContent='⠿';handle.title='Déplacer cette section';handle.setAttribute('aria-label',handle.title);section.appendChild(handle);
+    const key='experiment:'+id;collapsedBlocks.set(key,experimentLayout.collapsed[id]??(id==='advanced'));
+    makeCollapsible(section,key,{keep:'.experiment-block-heading',label:names[ids.indexOf(id)],onChange:value=>{experimentLayout.collapsed[id]=value;save()}});
+    heading.addEventListener('click',e=>{if(!e.target.closest('button,input,select,textarea,a'))section.querySelector(':scope > .collapse-toggle').click()});
+  }
+  initializeBlockOrdering(experimentWrap,{apply:()=>{
+    const order=[...experimentLayout.order,...ids.filter(id=>!experimentLayout.order.includes(id))];
+    order.forEach(id=>{const block=[...experimentWrap.children].find(b=>b.dataset.blockId===id);if(block)experimentWrap.appendChild(block)});
+  },save:()=>{experimentLayout.order=[...experimentWrap.children].filter(b=>b.dataset.blockId).map(b=>b.dataset.blockId);save()}});
+}
+let experimentBudgetGeneration=new Map();
+function renderExperimentBudgetDistribution(ctx){
+  const host=document.getElementById('experimentBudgetDistribution');if(!host)return;
+  const totals=ctx.results.totals.filter(t=>t.reliable&&t.complete&&Number.isFinite(t.child)&&t.generation!==0);
+  const generations=[...new Set(totals.map(t=>t.generation))].sort((a,b)=>a===null?1:b===null?-1:a-b);
+  if(!generations.length){host.innerHTML='<p>Aucun budget descendant complet et fiable disponible. G0 décrit les fondateurs, pas une distribution de descendants.</p>';return}
+  const key=ctx.experiment_id||'history';let g=experimentBudgetGeneration.get(key);if(!generations.includes(g))g=generations[0];
+  const draw=()=>{
+    experimentBudgetGeneration.set(key,g);
+    const selected=totals.filter(t=>t.generation===g),bins=new Map();selected.forEach(t=>bins.set(t.child,(bins.get(t.child)||0)+1));
+    const mean=selected.reduce((sum,t)=>sum+t.child,0)/selected.length,max=Math.max(...bins.values()),g0=ctx.results.descriptive.generation_comparison?.g0;
+    const label=g===null?'Génération inconnue':'G'+g;
+    host.innerHTML='<h3>Distribution des budgets individuels — '+label+'</h3><label>Génération des descendants <select class="control" id="experimentBudgetGeneration">'+generations.map(v=>'<option value="'+v+'"'+(v===g?' selected':'')+'>'+(v===null?'Génération inconnue':'G'+v)+'</option>').join('')+'</select></label><p><strong>Moyenne '+label+' : '+experimentDecimal(mean)+' · '+selected.length+' naissances indépendantes</strong>'+(ctx.experiment_id&&g===1&&Number.isFinite(g0)?' · Δ par rapport à G0 : '+experimentSigned(mean-g0):'')+'</p><div class="experiment-budget-bars" role="img" aria-label="Budgets individuels : '+[...bins].sort((a,b)=>a[0]-b[0]).map(([v,n])=>v+' points : '+n+' naissances').join(', ')+'">'+[...bins].sort((a,b)=>a[0]-b[0]).map(([v,n])=>'<div class="experiment-budget-bin" data-budget="'+v+'" data-count="'+n+'"><strong>'+n+'</strong><div style="height:'+Math.max(1,180*n/max)+'px"></div><span>'+v+'</span></div>').join('')+'</div><p class="small">Axe horizontal : budget total de l’enfant. Axe vertical : effectif, indiqué sur chaque barre. Un poids par tirage fiable ; jumeaux liés et exclusions traités comme dans le graphique. G0 reste la moyenne des totaux des fondateurs.</p>';
+    host.querySelector('select').onchange=e=>{g=e.target.value==='null'?null:Number(e.target.value);draw()};
+  };draw();
+}
+
 function experimentViewContext(){
   const series=experimentSessions().find(s=>s.id===experimentState.selectedExperimentId)||null;
   const controlled=experimentMode==='controlled';
@@ -2583,13 +2631,12 @@ function renderExperiment(){
     (controlled?'<section class="experiment-section"><h2>Présentation de l’expérience</h2>'+ (series?'<p>Identifiant technique : <code>'+esc(series.id)+'</code></p>'+experimentMetadataFields('experimentInfo',series)+'<p class="small" id="experimentMetadataState" role="status">Modifications enregistrées automatiquement, même après clôture.</p>':'')+'<p>Snow Wolf · '+(series?(running?'En cours':'Terminée'):'Aucune expérience démarrée')+'</p>'+(series?'<div class="experiment-pair">'+experimentParentHtml(data.byId.get(series.femaleId),'Female',current.maternal,series.femaleId)+experimentParentHtml(data.byId.get(series.maleId),'Male',current.paternal,series.maleId)+'</div><p><strong>Progression : '+progress+' / '+target+' tirages analysables</strong></p><progress aria-label="Progression de l’expérience sélectionnée" max="'+target+'" value="'+Math.min(progress,target)+'"></progress>'+(complete&&running?'<p>Objectif atteint. Terminer la série ou poursuivre explicitement pour augmenter l’échantillon.</p>':'')+(series.legacy?'<p>Série V8/V2 P1 conservée.</p>':''):'<p>Choisir un couple puis démarrer le suivi. Les naissances déjà connues sont exclues de sa progression.</p>')+
     '<div class="experiment-actions">'+action('experimentChoose',series?'Préparer un autre couple':'Choisir le couple','')+action('experimentEnd','Terminer l’expérience',!running?'Cette expérience n’est pas la série actuellement en cours.':'')+action('experimentSend','Envoyer le couple au Breeding Panel',sendReason)+action('experimentExclude','Exclure de l’expérience',!series?'Sélectionner une expérience contrôlée.':'')+'</div><p id="experimentExclusionState" role="status"></p><section class="experiment-card experiment-exclusions" id="experimentExclusions" hidden></section><span id="experimentSendState" role="status"></span><div class="experiment-card" id="experimentChooser"'+(experimentChoosing||!series?'':' hidden')+'><h3>Choisir et démarrer</h3>'+experimentMetadataFields('experimentNewInfo',experimentMetadataDraft)+'<p>La sélection, le démarrage et l’envoi au jeu sont trois actions distinctes.</p><div class="experiment-controls"><label>Femelle <select class="control" id="experimentFemale">'+breederOptions('Female')+'</select></label><label>Mâle <select class="control" id="experimentMale">'+breederOptions('Male')+'</select></label><label>Objectif de la nouvelle série <input class="control" id="experimentNewTarget" type="number" min="1" step="1" value="'+state.target+'"></label></div><div class="experiment-pair">'+(pair.female?experimentPetHtml(pair.female):'<p>Femelle à sélectionner.</p>')+(pair.male?experimentPetHtml(pair.male):'<p>Mâle à sélectionner.</p>')+'</div>'+action('experimentStart','Démarrer l’expérience',startReason)+'</div></section>':'')+
     '<section class="experiment-section"><h2>Échantillon étudié — '+titleHtml+'</h2>'+(controlled?'<p>'+ctx.results.manual_exclusions.events+' tirage(s) / '+ctx.results.manual_exclusions.individuals+' individu(s) exclus manuellement de cette expérience, conservés dans le cheptel et l’historique global. Les compteurs et graphiques ci-dessous portent sur les tirages restants.</p>':'')+'<div class="experiment-metrics"><div><strong>'+counts.individuals+'</strong><span>individus descendants observés</span></div><div><strong>'+counts.events+'</strong><span>événements capturés après regroupement</span></div><div><strong>'+counts.draws+'</strong><span>tirages distincts exploitables selon les liens connus</span></div><div><strong>'+counts.linkedTwins+'</strong><span>individus jumeaux supplémentaires reliés ('+counts.twinGroups+' groupes)</span></div><div><strong>'+counts.uncertainEvents+'</strong><span>événements incertains exclus</span></div></div><p>'+counts.analysable+' tirages fournissent au moins une stat analysable. Un jumeau sans lien explicite peut rester non reconnu : '+counts.linkedTwins+' jumeaux reliés ne prouve pas l’absence d’autres jumeaux.</p>'+(ctx.results.quality.possible_unassigned.length?'<p class="experiment-warning">'+ctx.results.quality.possible_unassigned.length+' individus à association possible mais non démontrée, hors de cet échantillon. Ils sont identifiés dans les analyses avancées.</p>':'')+'</section>'+
-    '<section class="experiment-section"><h2>Ce que nous avons appris — '+titleHtml+'</h2><div class="experiment-lessons">'+ctx.summary.findings.map(l=>'<article class="experiment-card"><h3>'+esc(l.kind)+'</h3><p>'+esc(l.text)+'</p></article>').join('')+'</div><p>Talents Genetics supposés constants ; ces constats ne déterminent pas les probabilités vanilla.</p></section>'+
-    (controlled?'<section class="experiment-section"><h2>Prochaine expérience</h2>'+(running&&!complete?'<p>Continuer ce couple : '+progress+' / '+target+' tirages analysables. Compléter l’échantillon ne confirme pas à lui seul un modèle.</p>':'')+'<div class="experiment-pair">'+experimentParentHtml(next.female,'Female',next.maternal)+experimentParentHtml(next.male,'Male',next.paternal)+'</div><p>'+esc(next.reason)+'</p>'+action('experimentNext','Préparer ce croisement',!next.female||!next.male?'Créer les reproducteurs indiqués avec Rada et attendre leur apparition dans le JSON.':'')+'</section>':'')+
-    '<section class="experiment-section"><div class="experiment-chart-heading"><h2>Total génétique par génération — '+titleHtml+'</h2>'+experimentGenerationNumbers(ctx)+'</div><p>Somme V/F/P/R/T/A/I de 0 à 70. Points : un total complet par tirage ; ligne : moyenne descriptive. G0 : moyenne des totaux des deux parents fondateurs ; G1 : moyenne des totaux complets de leurs descendants G1, un poids par tirage fiable.</p>'+(controlled&&generations.filter(g=>g.generation!==null).length===1?'<p>Cette expérience ne couvre qu’une génération. L’évolution entre générations ne peut pas encore être étudiée.</p>':'')+experimentSumGraph(ctx.results.totals,generations)+'</section>'+
-    '<section class="experiment-section"><h2>Sept distributions — '+titleHtml+'</h2><p>Valeurs de 0 à 10 ; nombres au-dessus des barres : effectifs réels. Un groupe gémellaire fiable compte une fois. Chaque histogramme affiche son propre nombre de valeurs disponibles.</p>'+(controlled?'<label class="experiment-checkbox"><input id="experimentGroupDistributions" type="checkbox"'+(experimentGrouped?' checked':'')+'> Regrouper les 7 distributions</label>':'')+'<div class="experiment-charts'+(controlled&&experimentGrouped?' is-aggregated':'')+'" id="experimentMainHistograms">'+experimentDistributionHtml(ctx,controlled&&experimentGrouped)+HypothesisLab.slot+'</div><details class="hypothesis-lab" id="hypothesisLab"></details><p>Inférieure et supérieure sont des comparaisons strictes ; égale reste distincte. Chaque parent a son propre effectif de valeurs exploitables. Les écarts observés ne prouvent pas des mutations ni un mécanisme d’héritage.</p></section>'+
+    '<section class="experiment-section"><div class="experiment-chart-heading"><h2>Total génétique par génération — '+titleHtml+'</h2>'+experimentGenerationNumbers(ctx)+'</div><p>Somme V/F/P/R/T/A/I de 0 à 70. Points : un total complet par tirage ; ligne : moyenne descriptive. G0 : moyenne des totaux des deux parents fondateurs ; G1 : moyenne des totaux complets de leurs descendants G1, un poids par tirage fiable.</p>'+(controlled&&generations.filter(g=>g.generation!==null).length===1?'<p>Cette expérience ne couvre qu’une génération. L’évolution entre générations ne peut pas encore être étudiée.</p>':'')+experimentSumGraph(ctx.results.totals,generations)+'<div id="experimentBudgetDistribution"></div></section>'+
+    '<section class="experiment-section"><h2>Sept distributions — '+titleHtml+'</h2><p>Valeurs de 0 à 10 ; nombres au-dessus des barres : effectifs réels. Un groupe gémellaire fiable compte une fois. Chaque histogramme affiche son propre nombre de valeurs disponibles.</p>'+(controlled?'<label class="experiment-checkbox"><input id="experimentGroupDistributions" type="checkbox"'+(experimentGrouped?' checked':'')+'> Regrouper les 7 distributions</label>':'')+'<div class="experiment-charts'+(controlled&&experimentGrouped?' is-aggregated':'')+'" id="experimentMainHistograms">'+experimentDistributionHtml(ctx,controlled&&experimentGrouped)+HypothesisLab.slot+'</div><p>Inférieure et supérieure sont des comparaisons strictes ; égale reste distincte. Chaque parent a son propre effectif de valeurs exploitables. Les écarts observés ne prouvent pas des mutations ni un mécanisme d’héritage.</p></section>'+
+    '<section class="experiment-section"><h2>Hypothesis Lab</h2><div class="hypothesis-lab" id="hypothesisLab"></div></section>'+
     '<section class="experiment-section"><h2>Bloodlines — '+titleHtml+'</h2><p>'+blood.n+' tirages exploitables et '+blood.excluded+' événements exclus. Aucun héritage limité aux parents n’est présupposé.</p>'+experimentTable(['Bloodline','Effectif','Fréquence'],ctx.results.descriptive.bloodline_display.rows.map(r=>[esc(r.label),r.count+' / '+r.n,experimentPercent(r.frequency)]))+(ctx.results.descriptive.bloodline_display.note?'<p class="small">'+esc(ctx.results.descriptive.bloodline_display.note)+'</p>':'')+'</section>'+
     '<section class="experiment-section"><h2>Partager les résultats</h2><p>Publier l’expérience primaire sélectionnée, toutes les expériences conservées, l’historique indépendant et les observations originales. Ouvrir l’historique ne remplace pas l’expérience primaire. Destination privée : research/genetics/latest.json.</p><button class="control" id="experimentPublish"'+(experimentPublishing?' disabled title="Publication en cours"':'')+'>Publier sur GitHub</button><p id="experimentPublishState" role="status"></p></section>'+
-    '<details id="experimentAdvanced" class="experiment-advanced"'+(experimentAdvancedOpen?' open':'')+'><summary>Analyses avancées et observations individuelles</summary>'+experimentTable(['Bloodlines : détail méthodologique','Effectif','Fréquence'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'<p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
+    '<section id="experimentAdvanced" class="experiment-advanced"><h2>Analyses avancées et observations individuelles</h2>'+experimentTable(['Bloodlines : détail méthodologique','Effectif','Fréquence'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'<p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
     '<section class="experiment-section"><h2>Inheritance Analysis</h2><p>Deux deltas sont conservés. La compatibilité tient compte du plafonnement 0–10 : un delta affiché nul peut cacher plusieurs variations latentes. Les données parentales manquantes restent inconnues.</p>'+
     events.map(e=>'<details class="experiment-birth"><summary>'+esc(canonicalName(e.pet.name))+' — '+esc(e.pet.sex||'Inconnu')+' — '+esc(e.pet.bt_id)+' · '+(e.generation===null?'Génération inconnue':'G'+e.generation)+'</summary>'+rowIdentity(e)+experimentTable(['Stat','Père','Mère','Enfant','DeltaFather','DeltaMother','Classification ±'+bound],BreedingMath.keys.map((key,i)=>{
       const o=BreedingMath.observations([e],i,bound)[0];return [key,experimentNumber(e.paternal[i]),experimentNumber(e.maternal[i]),experimentNumber(e.child[i]),experimentNumber(o.df),experimentNumber(o.dm),{father:'Compatible père uniquement',mother:'Compatible mère uniquement',both:'Compatible avec les deux (ambigu)',neither:'Incompatible avec les deux',unknown:'Non analysable'}[o.kind]];
@@ -2608,7 +2655,7 @@ function renderExperiment(){
     experimentTable(['Descendant — fiche complète','État / génération','Événement indépendant / série','Valeurs parentales utilisées'],events.flatMap(e=>e.members.map(r=>[
       experimentPetHtml(r.pet,r.child),esc(r.pet.lifecycle_state)+' / '+(r.generation===null?'Génération inconnue':'G'+r.generation),esc(e.drawId)+'<br>'+esc(r.sessionId||'Hors expérience')+'<br>'+(r.twinIssue?'Lien twin_source non fiable, exclu des estimations':e.members.length>1?'Jumeaux : un seul événement':'Événement distinct'),
       BreedingMath.captureFlags(r).map(esc).join('<br>')+(r.parentEvidence==='controlled_record'?'<br>BT_ID parentaux déjà capturés dans l’enregistrement contrôlé : '+esc(r.motherId)+' / '+esc(r.fatherId)+' (parenté originale conservée ci-contre).':'')+'<br>Père : '+esc(experimentGenes(r.paternal))+'<br>Mère : '+esc(experimentGenes(r.maternal))+(e.conflict.some(Boolean)?'<br><span class="experiment-warning">Stats gémellaires contradictoires exclues.</span>':'')
-    ])))+'</section>'+ (ctx.results.quality.possible_unassigned.length?'<section class="experiment-section"><h2>Captures possibles hors de l’échantillon contrôlé</h2><p>Ces individus ne participent à aucun résultat de cette expérience. Un parent connu correspond, ce qui ne démontre ni l’autre filiation, ni une naissance dans cette série.</p>'+ctx.results.quality.possible_unassigned.map(r=>experimentPetHtml(data.byId.get(r.bt_id))).join('')+'</section>':'')+'</details>';
+    ])))+'</section>'+ (ctx.results.quality.possible_unassigned.length?'<section class="experiment-section"><h2>Captures possibles hors de l’échantillon contrôlé</h2><p>Ces individus ne participent à aucun résultat de cette expérience. Un parent connu correspond, ce qui ne démontre ni l’autre filiation, ni une naissance dans cette série.</p>'+ctx.results.quality.possible_unassigned.map(r=>experimentPetHtml(data.byId.get(r.bt_id))).join('')+'</section>':'')+'</section>';
 
   for(const [suffix,key] of [['Name','name'],['Description','description']]){
     document.getElementById('experimentNewInfo'+suffix)?.addEventListener('input',e=>{experimentMetadataDraft[key]=e.target.value});
@@ -2633,12 +2680,10 @@ function renderExperiment(){
     if(controlled&&series)series.analysisBound=value;else state.bound=value;saveExperiment();renderExperiment();
   });
   document.getElementById('experimentNewTarget')?.addEventListener('change',event=>{const value=Number(event.target.value);if(Number.isInteger(value)&&value>0){state.target=value;saveExperiment()}else event.target.value=state.target});
-  document.getElementById('experimentAdvanced').addEventListener('toggle',e=>{experimentAdvancedOpen=e.target.open});
   document.getElementById('experimentChoose')?.addEventListener('click',()=>{experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
   for(const [id,key] of [['experimentFemale','femaleId'],['experimentMale','maleId']])document.getElementById(id)?.addEventListener('change',event=>{experimentSelection={...selection,[key]:event.target.value};experimentChoosing=true;renderExperiment()});
   document.getElementById('experimentStart')?.addEventListener('click',()=>{if(!startReason)startExperiment(pair)});
   document.getElementById('experimentEnd')?.addEventListener('click',()=>{if(!running)return;series.status='ended';series.ended=new Date().toISOString();saveExperiment();renderExperiment()});
-  document.getElementById('experimentNext')?.addEventListener('click',()=>{experimentSelection={femaleId:next.female?.bt_id||'',maleId:next.male?.bt_id||'',reason:next.reason};experimentChoosing=true;renderExperiment();document.getElementById('experimentChooser').scrollIntoView({block:'nearest'})});
   document.getElementById('experimentSend')?.addEventListener('click',async()=>{
     if(sendReason)return;
     breedingPanel={female_bt_id:current.female.bt_id,male_bt_id:current.male.bt_id};breedingPanelDirty=true;renderBreedingPairPanel();refreshSelectedDetail();
@@ -2650,6 +2695,8 @@ function renderExperiment(){
 
   document.getElementById('experimentPublish').addEventListener('click',openExperimentPublication);showExperimentPublication();
   HypothesisLab.mount(document.getElementById('hypothesisAverage'),document.getElementById('hypothesisLab'),ctx);
+  renderExperimentBudgetDistribution(ctx);
+  initializeExperimentBlocks();
 }
 
 // An explicit publication exports a whitelisted, account-free snapshot. Credentials never enter state.

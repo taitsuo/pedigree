@@ -651,3 +651,15 @@ svg{display:block;min-width:100%;}
 .hypothesis-average pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
 
 .hypothesis-average svg .hyp-observed-label{fill:var(--active)}.hypothesis-average svg .hyp-predicted-label{fill:#db9e55}
+
+/* Experiment presentation uses the shared movable/collapsible block machinery. */
+.experiment-movable{border:1px solid var(--border,#575746);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--theme-toolbar,#191c17)}
+.experiment-movable>.experiment-block-heading{cursor:pointer;padding-right:76px;margin-top:0;min-height:30px}
+.experiment-movable.is-collapsed{padding-bottom:8px}.experiment-movable .experiment-chart-heading{align-items:flex-start}
+.experiment-budget-bars{height:235px;display:flex;align-items:flex-end;justify-content:space-evenly;gap:16px;border-bottom:1px solid var(--border,#575746);margin:12px 0;overflow-x:auto}
+.experiment-budget-bin{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;min-width:42px;max-width:220px;height:100%}
+.experiment-budget-bin>div{width:75%;background:#3567a7;border-radius:7px 7px 0 0}.experiment-budget-bin strong,.experiment-budget-bin span{flex:none}
+.hypothesis-lab{border:0;padding:0;margin:0}.hypothesis-lab input,.hypothesis-lab select,.hypothesis-lab textarea{max-width:100%;min-width:0;box-sizing:border-box}
+.hyp-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.hyp-primary label,.hypothesis-lab label{display:flex;flex-direction:column;gap:6px}
+.hyp-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.hyp-toolbar>label{flex:1;min-width:180px}.hyp-save-state{font-weight:bold}.hypothesis-lab details{margin-top:18px;padding-top:12px;border-top:1px solid var(--border,#575746)}
+@media(max-width:640px){.hyp-primary{grid-template-columns:1fr}.experiment-movable{padding:12px}.experiment-movable>.experiment-block-heading{font-size:17px}.experiment-chart-heading{flex-direction:column}.experiment-generation-numbers{white-space:normal}}
