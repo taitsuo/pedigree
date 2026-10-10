@@ -280,11 +280,14 @@ function roleClass(n){
 }
 function presenceLabel(n){return n.lifecycleState==='ARCHIVED'?'Archived':n.historical?'Historical':'Active'}
 function presenceClass(n){return n.historical?'historical':n.isPresent?'active':'inactive'}
+function confirmedAdult(n){return typeof n?.stage==='string'&&n.stage.trim().toLowerCase()==='adult'}
+function activeAdultCount(ids){return [...ids].filter(id=>{const n=byId.get(id);return confirmedAdult(n)&&n.breedingActive}).length}
 function automaticInactiveReason(n){
+  if(n.deathStatus==='dead')return 'Dead animal: inactive for breeding';
   if(n.lifecycleState==='ARCHIVED')return 'Archived animal: retained for history and pedigree';
   if(n.historical)return 'Historical animal: inactive for breeding';
   if(n.lifecycleState!=='ACTIVE')return 'Not an active animal';
-  if(n.stage!=='adult')return 'Juvenile: not yet a breeder';
+  if(!confirmedAdult(n))return 'Adult stage not confirmed: not yet a breeder';
   return '';
 }
 function sexRank(n){return n.sex==='F'?0:n.sex==='M'?2:1}
@@ -511,7 +514,7 @@ function viewNodes(view=activeView,speciesKey=currentSpecies,{includeInactive=fa
   }else if(view.kind==='family'){
     ids=familyIdsForPet(byId.get(view.key));
   }
-  return full.filter(n=>ids.has(n.id)&&(includeInactive||!hideInactive||n.breedingActive));
+  return full.filter(n=>ids.has(n.id)&&(includeInactive||(confirmedAdult(n)&&(!hideInactive||n.breedingActive))));
 }
 
 function getVisibleNodes(){
@@ -841,9 +844,9 @@ function categoryIsActive(descriptor){
 }
 
 function categoryLabel(descriptor){
-  if(descriptor.kind==='species')return `${speciesLabel(descriptor.key)} (${descriptor.memberIds.size})`;
-  if(descriptor.kind==='bloodline')return `${descriptor.key} (${descriptor.memberIds.size})`;
-  return `${displayName(byId.get(descriptor.founderId))} (${descriptor.descendantIds.size})`;
+  if(descriptor.kind==='species')return `${speciesLabel(descriptor.key)} (${activeAdultCount(descriptor.memberIds)})`;
+  if(descriptor.kind==='bloodline')return `${descriptor.key} (${activeAdultCount(descriptor.memberIds)})`;
+  return `${displayName(byId.get(descriptor.founderId))} (${activeAdultCount(descriptor.descendantIds)})`;
 }
 
 function categoryColor(descriptor){
@@ -1071,7 +1074,7 @@ function openPetLineage(pet,foundation=null){
 }
 
 function updateInactiveToggle(){
-  const inactiveCount=currentSpeciesNodes().filter(n=>!n.breedingActive).length;
+  const inactiveCount=currentSpeciesNodes().filter(n=>confirmedAdult(n)&&!n.breedingActive).length;
   inactiveToggleBtn.textContent=hideInactive?`Show inactive (${inactiveCount})`:`Hide inactive (${inactiveCount})`;
   inactiveToggleBtn.classList.toggle('primary-control',hideInactive);
   inactiveToggleBtn.classList.remove('active');
@@ -1556,7 +1559,7 @@ function render({selectFirst=false}={}){
   breedingTableWrap.style.display='none';
   wrap.style.display='block';
   const structuralList=viewNodes(activeView,currentSpecies,{includeInactive:true});
-  const list=structuralList.filter(n=>!hideInactive||n.breedingActive);
+  const list=structuralList.filter(n=>confirmedAdult(n)&&(!hideInactive||n.breedingActive));
   const query=search.value.trim().toLowerCase();
   const matchingIds=new Set(list.filter(node=>nodeMatchesSearch(node,query)).map(node=>node.id));
   setViewHeading(activeViewLabel(),activeViewDescription());
@@ -1706,7 +1709,7 @@ function renderSelectedDetail(id){
     detail.querySelectorAll('[data-detail-field]').forEach(el=>{
       edits[key][el.dataset.detailField]=el.dataset.detailField==='breedingActive'?el.value==='true':el.value;
     });
-    detailDrafts.delete(draftKey(id)); saveBoardEdits(edits); applyBoardEdits(); render(); renderSelectedDetail(id);
+    detailDrafts.delete(draftKey(id)); saveBoardEdits(edits); applyBoardEdits(); updateCategoryNavigation(); render(); renderSelectedDetail(id);
     const state=document.getElementById('detailSaveState'); if(state)state.textContent='Saved ✓';
   };
   const detailDraftChanged=()=>[...detail.querySelectorAll('[data-detail-field]')].some(el=>{
@@ -1850,7 +1853,7 @@ function parentDisplay(n){
 }
 function boardNodes(){
   applyBoardEdits();
-  let list=specialViewScopeNodes().filter(n=>!hideInactive||n.breedingActive);
+  let list=specialViewScopeNodes().filter(n=>confirmedAdult(n)&&(!hideInactive||n.breedingActive));
   const q=search.value.trim().toLowerCase();
   if(q)list=list.filter(n=>[n.name,n.nickname,n.bloodline,n.role,n.notes,n.sex,presenceLabel(n),activityLabel(n),statsText(n),parentDisplay(n),n.level,n.usefulScore,n.total7].join(' ').toLowerCase().includes(q));
   const key=boardSort.key, dir=boardSort.dir;
@@ -1871,7 +1874,7 @@ function renderBreedingTable(){
     ? `Bloodline ${specialViewScope().key} within ${speciesLabel(currentSpecies)}. Archived animals remain in history and pedigree; only active adults can breed.`
     : 'Active adults are eligible for breeding, subject to your choices. Archived animals remain available for history and pedigree.');
   const list=boardNodes();
-  const scopeNodes=specialViewScopeNodes();
+  const scopeNodes=specialViewScopeNodes().filter(confirmedAdult);
   const scopeTotal=scopeNodes.length;
   countText.textContent=`${list.length} shown / ${scopeTotal} in scope`;
   breedingCountHint.textContent=`${scopeNodes.filter(n=>!n.breedingActive).length} inactive`;
@@ -1903,7 +1906,7 @@ function renderBreedingTable(){
     const all=loadBoardEdits(), key=el.dataset.key, field=el.dataset.field;
     const value=field==='breedingActive'?el.value==='true':el.value;
     all[key]=all[key]||{}; all[key][field]=value; saveBoardEdits(all); applyBoardEdits();
-    if(field==='breedingActive')renderBreedingTable();
+    if(field==='breedingActive'){updateCategoryNavigation();renderBreedingTable()}
   };
   breedingTable.querySelectorAll('input[data-field]').forEach(el=>el.addEventListener('input',()=>saveField(el)));
   breedingTable.querySelectorAll('select[data-field]').forEach(el=>el.addEventListener('change',()=>saveField(el)));
@@ -2198,7 +2201,7 @@ function applyCensus(document){
     const isPresent=p.lifecycle_state==='ACTIVE';
     const n={
       id:petId(uid),
-      bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,lifecycleState:p.lifecycle_state,
+      bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,lifecycleState:p.lifecycle_state,deathStatus:p.death?.status,
       twinSource:p.twin_source??null,motherLabel:p.mother||'',fatherLabel:p.father||'',
       name:canonicalName(p.name)||'Unnamed',
       actor_class:p.actor_class||'',

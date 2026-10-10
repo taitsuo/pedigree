@@ -669,3 +669,6 @@ svg{display:block;min-width:100%;}
 [data-hyp-budget-evaluation] .experiment-table th{min-width:95px}
 
 .hypothesis-average .hyp-observed{fill:#83b876}.hypothesis-average .hyp-observed-label{fill:#83b876}.hypothesis-average .hyp-legend span:first-child{color:#83b876}
+
+/* Native predictions reuse the observed/expected chart palette. */
+.hyp-native-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.hyp-native-grid svg{display:block;width:100%;height:auto}.hyp-native-grid text{fill:var(--text,#ddd);font-size:11px}.hyp-native-distributions{margin-top:16px}[data-native-panel] .hyp-primary{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
