@@ -272,6 +272,14 @@ const ADVISOR_ROLE_BLOODLINE_PRIORITY={
 };
 
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function hasPetName(pet){
+  const name=Object.hasOwn(pet||{},'icarusName')?pet.icarusName:pet?.name;
+  return typeof name==='string'&&name.trim()!==''&&name.trim()!=='None';
+}
+function mutationBonusText(pet){
+  const value=pet?.genetics_mutation_chance_pct;
+  return typeof value==='number'&&Number.isFinite(value)?'+'+value+'%':'—';
+}
 function activityClass(n){return n.breedingActive?'active':'culled'}
 function activityLabel(n){return n.breedingActive?'Active':'Inactive'}
 function roleClass(n){
@@ -281,7 +289,7 @@ function roleClass(n){
 function presenceLabel(n){return n.lifecycleState==='ARCHIVED'?'Archived':n.historical?'Historical':'Active'}
 function presenceClass(n){return n.historical?'historical':n.isPresent?'active':'inactive'}
 function confirmedAdult(n){return typeof n?.stage==='string'&&n.stage.trim().toLowerCase()==='adult'}
-function activeAdultCount(ids){return [...ids].filter(id=>{const n=byId.get(id);return confirmedAdult(n)&&n.breedingActive}).length}
+function activeAdultCount(ids){return [...ids].filter(id=>{const n=byId.get(id);return hasPetName(n)&&confirmedAdult(n)&&n.breedingActive}).length}
 function automaticInactiveReason(n){
   if(n.deathStatus==='dead')return 'Dead animal: inactive for breeding';
   if(n.lifecycleState==='ARCHIVED')return 'Archived animal: retained for history and pedigree';
@@ -292,8 +300,8 @@ function automaticInactiveReason(n){
 }
 function sexRank(n){return n.sex==='F'?0:n.sex==='M'?2:1}
 function statsText(n){return n.stats ? n.stats.map(value=>value??'—').join(' / ') : '—'}
-function offspringOf(id){return (childrenByParentId.get(id)||[]).map(childId=>byId.get(childId)).filter(Boolean)}
-function siblingsOf(n){return (siblingsById.get(n.id)||[]).map(id=>byId.get(id)).filter(Boolean)}
+function offspringOf(id){return (childrenByParentId.get(id)||[]).map(childId=>byId.get(childId)).filter(hasPetName)}
+function siblingsOf(n){return (siblingsById.get(n.id)||[]).map(id=>byId.get(id)).filter(hasPetName)}
 
 const SPECIES_ALIAS_GROUPS={
   Moa:['Mount_Moa','Juvenile_Moa','BP_Mount_Moa_C'],
@@ -474,7 +482,7 @@ function recomputeUsefulScores(speciesKey=currentSpecies){
 }
 
 function currentSpeciesNodes(){
-  return DATA.nodes.filter(n=>nodeSpeciesKey(n)===currentSpecies);
+  return DATA.nodes.filter(n=>hasPetName(n)&&nodeSpeciesKey(n)===currentSpecies);
 }
 
 function familyIdsForPet(pet){
@@ -514,7 +522,7 @@ function viewNodes(view=activeView,speciesKey=currentSpecies,{includeInactive=fa
   }else if(view.kind==='family'){
     ids=familyIdsForPet(byId.get(view.key));
   }
-  return full.filter(n=>ids.has(n.id)&&(includeInactive||(confirmedAdult(n)&&(!hideInactive||n.breedingActive))));
+  return full.filter(n=>hasPetName(n)&&ids.has(n.id)&&(includeInactive||(confirmedAdult(n)&&(!hideInactive||n.breedingActive))));
 }
 
 function getVisibleNodes(){
@@ -1247,7 +1255,7 @@ function advisorParentHtml(n,sex,group=null){
   const equivalents=Math.max(0,(group?.pets?.length||1)-1);
   return `<div class="advisor-parent ${sex}" data-select-pet="${esc(n.id)}" role="button" tabindex="0">
     <div class="advisor-parent-head">
-      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'}</div></div>
+      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'} · Mutation bonus: ${mutationBonusText(n)}</div></div>
       <span class="sex" style="color:var(--${sex==='female'?'female':'male'})">${sex==='female'?'♀':'♂'}</span>
     </div>
     <div class="stats">${advisorStatHtml(n)}</div>
@@ -1466,7 +1474,7 @@ function renderAdvisor(){
     const members=group?.pets?.length?group.pets:[sex==='female'?pair.female:pair.male];
     const buttons=members.map(member=>{
       const uid=stablePetId(member.bt_id);
-      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
+      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')} · Mutation bonus: ${mutationBonusText(member)}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
     }).join('');
     return `<div class="advisor-alt-row ${members.length>1?'twins':''}">${buttons}</div>`;
   };
@@ -1507,7 +1515,7 @@ function renderAdvisor(){
     if(!next||uid===null)return;
     advisorState.chosenPairKey=next.key;
     advisorState[side==='female'?'selectedFemaleUid':'selectedMaleUid']=uid;
-    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>item.stage==='adult'&&stablePetId(item.bt_id)===uid);
+    const pet=(side==='female'?next.femaleGroup?.pets:next.maleGroup?.pets)?.find(item=>hasPetName(item)&&item.stage==='adult'&&stablePetId(item.bt_id)===uid);
     if(pet)selected=pet.id;
     renderAdvisor();
     refreshSelectedDetail();
@@ -1655,7 +1663,7 @@ function renderSelectedDetail(id){
   const focused=detail.contains(document.activeElement)&&detail.dataset.petId===id?document.activeElement:null;
   const focusState=focused?.dataset.detailField?{field:focused.dataset.detailField,start:focused.selectionStart,end:focused.selectionEnd}:null;
   detail.dataset.petId=id;
-  const n=byId.get(id); if(!n)return;
+  const n=byId.get(id); if(!hasPetName(n)){detail.innerHTML='<div class="detail-placeholder">No pet selected.</div>';selectedPetSummary.textContent='';return;}
   const ownedFoundation=foundationForPet(n);
   selectedPetSummary.textContent=`${displayName(n)} (${n.runtime_uid??'—'}) · ${n.sex==='F'?'Female':n.sex==='M'?'Male':'Unknown sex'}`;
   const inactiveLock=n.breedingInactiveReason||automaticInactiveReason(n);
@@ -1664,7 +1672,7 @@ function renderSelectedDetail(id){
   const siblings=siblingsOf(n);
   const parentButtons=['mother','father'].map(side=>{
     const parent=n[side]&&byId.get(n[side]);
-    if(parent)return `<button class="linkbtn" data-id="${esc(parent.id)}">${esc(displayName(parent))}</button>`;
+    if(hasPetName(parent))return `<button class="linkbtn" data-id="${esc(parent.id)}">${esc(displayName(parent))}</button>`;
     const label=n[side+'Label'];return label?`<span class="small">${side==='mother'?'Mother':'Father'}: ${esc(label)} (recorded name)</span>`:'';
   }).join('')||'<span class="small">None</span>';
   const siblingButtons=siblings.map(peer=>`<button class="linkbtn" data-id="${esc(peer.id)}">${esc(displayName(peer))}</button>`).join('')||'<span class="small">None</span>';
@@ -1681,6 +1689,7 @@ function renderSelectedDetail(id){
         <div class="item"><span class="label">${usefulLabel(nodeSpeciesKey(n))}</span><span class="value">${n.usefulScore??'—'}</span></div>
         <div class="item"><span class="label">Level</span><span class="value">${n.level??'—'}</span></div>
         <div class="item"><span class="label">Experience</span><span class="value">${n.experience??'—'}</span></div>
+        <div class="item"><span class="label">Mutation bonus</span><span class="value">${mutationBonusText(n)}</span></div>
       </div>
       <div class="detail-fields">
         <label>Nickname<input data-detail-field="nickname" value="${esc(n.nickname||'')}" placeholder="Optional nickname"></label>
@@ -1697,7 +1706,7 @@ function renderSelectedDetail(id){
         <div class="detail-relations">
           <div class="relation-group"><span class="relation-label">Parents</span>${parentButtons}</div>
           <div class="relation-group"><span class="relation-label">Siblings (${siblings.length})</span>${siblingButtons}</div>
-          <div class="relation-group"><span class="relation-label">Offspring</span>${childButtons}</div>
+          <div class="relation-group"><span class="relation-label">Offspring (${kids.length})</span>${childButtons}</div>
         </div>
         <div class="detail-save"><span class="save-state" id="detailSaveState"></span><button class="control" id="saveDetailBtn">Save annotations</button></div>
       </div>
@@ -1745,7 +1754,7 @@ function renderSelectedDetail(id){
   setTimeout(()=>scrollNodeIntoView(id),0);
 }
 function selectPet(id,{rerender=true}={}){
-  if(!byId.has(id))return;
+  if(!hasPetName(byId.get(id)))return;
   selected=id;
   if(rerender)render();
   renderSelectedDetail(id);
@@ -1844,7 +1853,7 @@ function roleOptionsHtml(selected=''){
   return `<option value="">No role</option>`+allRoles().map(role=>`<option value="${esc(role)}" ${role===selected?'selected':''}>${esc(role)}</option>`).join('');
 }
 function petNameWithUid(n){
-  return n?`${displayName(n)} (${n.runtime_uid??'—'})`:'—';
+  return hasPetName(n)?`${displayName(n)} (${n.runtime_uid??'—'})`:'—';
 }
 function parentDisplay(n){
   const m=n.mother?(byId.has(n.mother)?petNameWithUid(byId.get(n.mother)):n.mother):(n.motherLabel||'—');
@@ -1886,7 +1895,7 @@ function renderBreedingTable(){
     const statCells=(n.stats||Array(7).fill(null)).map((v,i)=>`<td class="statcell ${statClass(i,v)}">${v??'—'}</td>`).join('');
     tr.classList.toggle('selected-row',selected===n.id);
     tr.innerHTML=`
-      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.runtime_uid??'—')})</span></button></td>
+      <td><button class="linkbtn open-node" data-id="${esc(n.id)}"><span class="board-pet-name">${esc(n.name)}</span><span class="board-pet-uid">(${esc(n.runtime_uid??'—')})</span></button><div class="small">Mut: ${mutationBonusText(n)}</div></td>
       <td><input data-field="nickname" data-key="${esc(boardKey(n))}" value="${esc(n.nickname||'')}" placeholder="—"></td>
       <td>${n.sex==='F'?'♀ F':n.sex==='M'?'♂ M':'?'}</td>
       <td>${esc(n.bloodline||'—')}</td>
@@ -2037,13 +2046,13 @@ function hydrateBreedingPanel(payload){
 
 function selectedPetName(uid){
   if(uid===null)return 'Not selected';
-  const pet=currentPayload?.pets?.find(item=>item.stage==='adult'&&stablePetId(item.bt_id)===uid);
+  const pet=currentPayload?.pets?.find(item=>hasPetName(item)&&item.stage==='adult'&&stablePetId(item.bt_id)===uid);
   return pet&&canonicalName(pet.name)?canonicalName(pet.name):'[MISSING]';
 }
 
 function petByPersistentUid(uid){
   if(uid===null)return null;
-  return DATA.nodes.find(pet=>stablePetId(pet.bt_id)===uid)||null;
+  return DATA.nodes.find(pet=>hasPetName(pet)&&stablePetId(pet.bt_id)===uid)||null;
 }
 
 function breedingPairStatus(panel=breedingPanel){
@@ -2127,7 +2136,7 @@ function rebuildRelationshipIndexes(){
 }
 
 function rebuildNavigationCatalog(){
-  navigationCatalog=buildNavigationCatalog(DATA.nodes,childrenByParentId);
+  navigationCatalog=buildNavigationCatalog(DATA.nodes.filter(hasPetName),childrenByParentId);
 }
 
 function displayName(n){
@@ -2203,7 +2212,9 @@ function applyCensus(document){
       id:petId(uid),
       bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,lifecycleState:p.lifecycle_state,deathStatus:p.death?.status,
       twinSource:p.twin_source??null,motherLabel:p.mother||'',fatherLabel:p.father||'',
+      icarusName:p.name,
       name:canonicalName(p.name)||'Unnamed',
+      genetics_mutation_chance_pct:p.genetics_mutation_chance_pct,
       actor_class:p.actor_class||'',
       species_key:species,
       sex:p.sex==='Female'?'F':p.sex==='Male'?'M':'?',
@@ -2443,7 +2454,7 @@ function experimentFirstSeenLabel(p){
 }
 function openExperimentExclusions(series,ctx){
   const panel=document.getElementById('experimentExclusions');
-  const rows=ctx.recordedEvents.flatMap(event=>event.members.map(row=>({event,row}))).sort((a,b)=>{
+  const rows=ctx.recordedEvents.flatMap(event=>event.members.filter(row=>hasPetName(row.pet)).map(row=>({event,row}))).sort((a,b)=>{
     const at=experimentFirstSeenTime(a.row.pet),bt=experimentFirstSeenTime(b.row.pet);
     return at===null?(bt===null?a.row.pet.bt_id.localeCompare(b.row.pet.bt_id):1):bt===null?-1:bt-at||a.row.pet.bt_id.localeCompare(b.row.pet.bt_id);
   });
@@ -2455,7 +2466,7 @@ function openExperimentExclusions(series,ctx){
     if(!selected){preview.innerHTML='';return}
     const draw=selected.event,excluded=ctx.excludedEvents.includes(draw);
     const previous=(series.exclusions||[]).filter(r=>r.event_id===draw.drawId||draw.members.some(m=>r.individual_bt_ids?.includes(m.pet.bt_id)));
-    preview.innerHTML='<p>Événement : <strong>'+esc(draw.drawId)+'</strong> — '+draw.members.length+' individu(s). '+(draw.members.length>1?'Ce groupe lié sera traité en entier.':'Aucun jumeau confirmé dans ce groupe.')+'</p>'+draw.members.map(r=>'<p>Première détection : '+esc(experimentFirstSeenLabel(r.pet))+'</p>'+experimentPetHtml(r.pet,r.child)).join('')+(excluded?'<p>Exclusion active. Motif : '+esc(previous.map(r=>r.reason||'Non renseigné').join(' ; '))+'</p>':'<label>Motif facultatif <textarea class="control" id="experimentExcludeReason" rows="2" maxlength="1000"></textarea></label><p>Vérifier les informations ci-dessus puis confirmer l’exclusion de tout ce tirage des calculs de cette expérience.</p>')+'<button class="control" id="experimentExcludeConfirm">'+(excluded?'Annuler l’exclusion':'Confirmer l’exclusion')+'</button>';
+    preview.innerHTML='<p>Événement : <strong>'+esc(draw.drawId)+'</strong> — '+draw.members.length+' individu(s). '+(draw.members.length>1?'Ce groupe lié sera traité en entier.':'Aucun jumeau confirmé dans ce groupe.')+'</p>'+draw.members.filter(r=>hasPetName(r.pet)).map(r=>'<p>Première détection : '+esc(experimentFirstSeenLabel(r.pet))+'</p>'+experimentPetHtml(r.pet,r.child)).join('')+(excluded?'<p>Exclusion active. Motif : '+esc(previous.map(r=>r.reason||'Non renseigné').join(' ; '))+'</p>':'<label>Motif facultatif <textarea class="control" id="experimentExcludeReason" rows="2" maxlength="1000"></textarea></label><p>Vérifier les informations ci-dessus puis confirmer l’exclusion de tout ce tirage des calculs de cette expérience.</p>')+'<button class="control" id="experimentExcludeConfirm">'+(excluded?'Annuler l’exclusion':'Confirmer l’exclusion')+'</button>';
     document.getElementById('experimentExcludeConfirm').onclick=()=>{
       if(experimentMode!=='controlled'||experimentState.selectedExperimentId!==series.id)return;
       if(excluded)series.exclusions=series.exclusions.filter(r=>!previous.includes(r));
@@ -2479,6 +2490,7 @@ const experimentPercent=v=>v===null||v===undefined?'Indéterminé':(100*v).toFix
 const experimentGenes=g=>BreedingMath.keys.map((key,i)=>key+experimentNumber(g[i])).join(' / ');
 function experimentPetHtml(p,genes=null){
   if(!p)return '<span>Animal inconnu</span>';
+  if(!hasPetName(p))return '';
   const data=experimentData,g=genes||BreedingMath.genetics(p);
   const parent=side=>{
     const id=p[side+'_bt_id'],known=data.byId.get(id);
@@ -2642,7 +2654,7 @@ function renderExperiment(){
   const generationOptions=[...new Set(data.events.map(e=>e.generation))].sort((a,b)=>a===null?1:b===null?-1:a-b);
   const rowIdentity=e=>experimentPetHtml(e.pet,e.child)+'<span class="small">'+(e.generation===null?'Génération inconnue':'G'+e.generation)+' · tirage '+esc(e.drawId)+'</span>';
   const action=(id,text,reason)=>'<span class="experiment-action"><button class="control" id="'+id+'"'+(reason?' disabled aria-describedby="'+id+'Reason" title="'+esc(reason)+'"':'')+'>'+text+'</button>'+(reason?'<small id="'+id+'Reason">'+esc(reason)+'</small>':'')+'</span>';
-  const breederOptions=sex=>'<option value="">Sélectionner</option>'+data.breeders.filter(p=>p.sex===sex).map(p=>'<option value="'+esc(p.bt_id)+'"'+(p.bt_id===(sex==='Female'?selection.femaleId:selection.maleId)?' selected':'')+'>'+esc(canonicalName(p.name))+' — '+sex+' — '+esc(p.bt_id)+' — '+esc(experimentGenes(BreedingMath.genetics(p)))+'</option>').join('');
+  const breederOptions=sex=>'<option value="">Sélectionner</option>'+data.breeders.filter(p=>hasPetName(p)&&p.sex===sex).map(p=>'<option value="'+esc(p.bt_id)+'"'+(p.bt_id===(sex==='Female'?selection.femaleId:selection.maleId)?' selected':'')+'>'+esc(canonicalName(p.name))+' — '+sex+' — '+esc(p.bt_id)+' — '+esc(experimentGenes(BreedingMath.genetics(p)))+'</option>').join('');
   const bloodLabels={father:'Père uniquement (parents différents)',mother:'Mère uniquement (parents différents)',other:'Différente des deux parents',same:'Parents identiques : même Bloodline héritée (origine ambiguë)',sameOther:'Parents identiques : Bloodline différente'};
   experimentWrap.innerHTML=
     '<section class="experiment-context '+(controlled?'is-controlled':'is-history')+'"><div class="experiment-actions"><button class="control" id="experimentControlled" aria-pressed="'+controlled+'">Expérience contrôlée</button><button class="control" id="experimentHistory" aria-pressed="'+!controlled+'">Historique global</button></div><h2 id="experimentContextTitle">'+titleHtml+'</h2>'+
@@ -2655,9 +2667,9 @@ function renderExperiment(){
     '<section class="experiment-section"><h2>Hypothesis Lab</h2><div class="hypothesis-lab" id="hypothesisLab"></div></section>'+
     '<section class="experiment-section"><h2>Bloodlines — '+titleHtml+'</h2><p>'+blood.n+' tirages exploitables et '+blood.excluded+' événements exclus. Aucun héritage limité aux parents n’est présupposé.</p>'+experimentTable(['Bloodline','Effectif','Fréquence'],ctx.results.descriptive.bloodline_display.rows.map(r=>[esc(r.label),r.count+' / '+r.n,experimentPercent(r.frequency)]))+(ctx.results.descriptive.bloodline_display.note?'<p class="small">'+esc(ctx.results.descriptive.bloodline_display.note)+'</p>':'')+'</section>'+
     '<section class="experiment-section"><h2>Partager les résultats</h2><p>Publier l’expérience primaire sélectionnée, toutes les expériences conservées, l’historique indépendant et les observations originales. Ouvrir l’historique ne remplace pas l’expérience primaire. Destination privée : research/genetics/latest.json.</p><button class="control" id="experimentPublish"'+(experimentPublishing?' disabled title="Publication en cours"':'')+'>Publier sur GitHub</button><p id="experimentPublishState" role="status"></p></section>'+
-    '<section id="experimentAdvanced" class="experiment-advanced"><h2>Analyses avancées et observations individuelles</h2>'+experimentTable(['Bloodlines : détail méthodologique','Effectif','Fréquence'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'<p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
+    '<section id="experimentAdvanced" class="experiment-advanced"><h2>Analyses avancées et observations individuelles</h2>'+experimentTable(['Bloodlines : détail méthodologique','Effectif','Fréquence'],Object.entries(blood.counts).map(([k,n])=>[bloodLabels[k],n,experimentPercent(blood.frequencies[k])]))+'<p>Les tableaux conservent toutes les données disponibles, y compris les observations exclues. Paramètres exploratoires : « Indéterminé » si les données ne permettent pas de les estimer.</p><label>Amplitude supposée ± <input class="control" id="experimentBound" type="number" min="0" max="10" step="1" value="'+bound+'"></label><section class="experiment-section"><h2>Variations du total</h2>'+experimentTable(['Descendant (fiche complète)','Père / mère / enfant','Enfant − père','Enfant − mère','Enfant − moyenne'],events.filter(e=>hasPetName(e.pet)).map(e=>{const t=BreedingMath.totals(e);return [rowIdentity(e),[t.father,t.mother,t.child].map(v=>experimentNumber(v)).join(' / '),experimentNumber(t.df),experimentNumber(t.dm),experimentNumber(t.da)]}))+'</section>'+
     '<section class="experiment-section"><h2>Inheritance Analysis</h2><p>Deux deltas sont conservés. La compatibilité tient compte du plafonnement 0–10 : un delta affiché nul peut cacher plusieurs variations latentes. Les données parentales manquantes restent inconnues.</p>'+
-    events.map(e=>'<details class="experiment-birth"><summary>'+esc(canonicalName(e.pet.name))+' — '+esc(e.pet.sex||'Inconnu')+' — '+esc(e.pet.bt_id)+' · '+(e.generation===null?'Génération inconnue':'G'+e.generation)+'</summary>'+rowIdentity(e)+experimentTable(['Stat','Père','Mère','Enfant','DeltaFather','DeltaMother','Classification ±'+bound],BreedingMath.keys.map((key,i)=>{
+    events.filter(e=>hasPetName(e.pet)).map(e=>'<details class="experiment-birth"><summary>'+esc(canonicalName(e.pet.name))+' — '+esc(e.pet.sex||'Inconnu')+' — '+esc(e.pet.bt_id)+' · '+(e.generation===null?'Génération inconnue':'G'+e.generation)+'</summary>'+rowIdentity(e)+experimentTable(['Stat','Père','Mère','Enfant','DeltaFather','DeltaMother','Classification ±'+bound],BreedingMath.keys.map((key,i)=>{
       const o=BreedingMath.observations([e],i,bound)[0];return [key,experimentNumber(e.paternal[i]),experimentNumber(e.maternal[i]),experimentNumber(e.child[i]),experimentNumber(o.df),experimentNumber(o.dm),{father:'Compatible père uniquement',mother:'Compatible mère uniquement',both:'Compatible avec les deux (ambigu)',neither:'Incompatible avec les deux',unknown:'Non analysable'}[o.kind]];
     }))+'</details>').join('')+'</section>'+
     '<section class="experiment-section"><h2>Hypothesis Evaluation</h2><p>A : valeur du père ou de la mère, puis variation discrète entre −'+bound+' et +'+bound+', plafonnée à 0–10. B : moyenne parentale arrondie (0,5 vers le haut), puis même variation. Ces règles restent des hypothèses. « Compatibilité observée » n’est pas la probabilité que l’hypothèse soit vraie.</p>'+
@@ -2671,7 +2683,7 @@ function renderExperiment(){
       return [g.generation===null?'Génération inconnue':'G'+g.generation,g.events,experimentNumber(g.mean)+' / '+g.totalCount,previous&&previous.mean!==null&&g.mean!==null?experimentNumber(g.mean-previous.mean):'Inconnu',g.analysis.compatibility===null?'Indéterminée':g.analysis.compatibility.toFixed(1)+' %'];
     }))+generations.map(g=>'<details><summary>'+(g.generation===null?'Génération inconnue':'G'+g.generation)+' — distributions et estimations</summary><div class="experiment-charts">'+BreedingMath.keys.map((_,i)=>experimentHistogram(g.histograms[i],i)).join('')+'</div>'+experimentEvaluationHtml(g.analysis,bound)+'<p>'+esc(g.analysis.commonReason)+'</p>'+experimentEstimateHtml(g.analysis.common,bound)+'</details>').join('')+'</section>'+
     '<section class="experiment-section"><h2>Observations</h2><p>Archives et morts conservés. Les BT_ID complets relient les animaux ; noms et bloodlines ne servent jamais de clé. '+events.flatMap(e=>e.members).filter(r=>r.childChanged).length+' individus ont des genetics actuelles différentes des valeurs déjà observées : les premières valeurs mémorisées sont conservées.</p>'+
-    experimentTable(['Descendant — fiche complète','État / génération','Événement indépendant / série','Valeurs parentales utilisées'],events.flatMap(e=>e.members.map(r=>[
+    experimentTable(['Descendant — fiche complète','État / génération','Événement indépendant / série','Valeurs parentales utilisées'],events.flatMap(e=>e.members.filter(r=>hasPetName(r.pet)).map(r=>[
       experimentPetHtml(r.pet,r.child),esc(r.pet.lifecycle_state)+' / '+(r.generation===null?'Génération inconnue':'G'+r.generation),esc(e.drawId)+'<br>'+esc(r.sessionId||'Hors expérience')+'<br>'+(r.twinIssue?'Lien twin_source non fiable, exclu des estimations':e.members.length>1?'Jumeaux : un seul événement':'Événement distinct'),
       BreedingMath.captureFlags(r).map(esc).join('<br>')+(r.parentEvidence==='controlled_record'?'<br>BT_ID parentaux déjà capturés dans l’enregistrement contrôlé : '+esc(r.motherId)+' / '+esc(r.fatherId)+' (parenté originale conservée ci-contre).':'')+'<br>Père : '+esc(experimentGenes(r.paternal))+'<br>Mère : '+esc(experimentGenes(r.maternal))+(e.conflict.some(Boolean)?'<br><span class="experiment-warning">Stats gémellaires contradictoires exclues.</span>':'')
     ])))+'</section>'+ (ctx.results.quality.possible_unassigned.length?'<section class="experiment-section"><h2>Captures possibles hors de l’échantillon contrôlé</h2><p>Ces individus ne participent à aucun résultat de cette expérience. Un parent connu correspond, ce qui ne démontre ni l’autre filiation, ni une naissance dans cette série.</p>'+ctx.results.quality.possible_unassigned.map(r=>experimentPetHtml(data.byId.get(r.bt_id))).join('')+'</section>':'')+'</section>';
