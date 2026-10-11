@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V4.4.0</title>
+<title>Breeding Tool — V4.4.1</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V4.4.0</span></h1>
+    <h1>Breeding Tool <span class="version">V4.4.1</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -25,7 +25,6 @@
     <span class="badge" id="speciesBadge">Species: Snow Wolf</span>
     <span class="badge" id="populationBadge">Population: —</span>
     <span class="badge" id="importBadge">JSON: not connected</span>
-    <button class="control primary-control" id="refreshBtn" title="Select the BreedingTool folder containing your pet data, or refresh it">Connect folder</button>
     <button class="control" id="disconnectBtn" title="Forget the selected local folder" hidden>Disconnect</button>
     <div class="folder-help">
       Select the <strong>BreedingTool</strong> folder containing your migrated pet data.
@@ -43,12 +42,14 @@
 </div>
 <div class="global-toolbar" aria-label="Global tools">
   <div class="global-toolbar-left">
-<label>Account <select class="control" id="accountSelect"><option value="">Select account</option></select></label>
-<label>World <select class="control" id="worldSelect"><option value="">Active world</option></select></label><span class="small" id="worldState"></span>
+<label>Account: <select class="control" id="accountSelect"><option value="">Select account</option></select></label>
+<span class="small character-context">| Character: <span id="characterState">—</span> |</span>
+<label>World: <select class="control" id="worldSelect"><option value="">Active world</option></select></label><span class="small" id="worldState"></span>
     <button class="tab" id="usefulConfigBtn" title="Choose the priority stats used by scoring and color coding" aria-expanded="false">Priority stats</button>
     <button class="control" id="inactiveToggleBtn" title="Show pets excluded from breeding" aria-pressed="false">Show inactive</button>
   </div>
   <div class="global-toolbar-right">
+    <button class="control primary-control" id="refreshBtn" title="Select the BreedingTool folder containing your pet data, or refresh it">Connect folder</button>
     <button class="control" id="cancelCommandBtn" title="Cancel the selected account’s pending command">Cancel pending command</button>
     <button class="control" id="reloadChoicesBtn" title="Discard unsaved choices and reload the saved version">Reload choices</button><button class="control primary-control" id="saveChoicesBtn" title="Save choices through the running mod">Save choices</button>
     <div class="search-wrap"><input id="search" class="search global-search" type="search" placeholder="Search…"><button class="search-clear" id="searchClearBtn" title="Clear search" aria-label="Clear search">×</button></div>
@@ -129,7 +130,7 @@
           <div class="advisor-stat-ref-detail" id="advisorStatReferenceDetail"></div>
         </aside>
       </div>
-      <p class="small"><strong>Mutation bonus values are last observed values.</strong><br>Use Manual Refresh after a pet levels up or after changing your Genetics talents.</p>
+      <p class="small"><strong>Character and individual mutation bonuses are separate.</strong><br>The character bonus comes from the local player’s Genetics talents. A Fierce pet’s individual bonus comes from its native Bloodline growth curve at the last refreshed level; other known Bloodlines contribute 0%. Use Manual Refresh after changing talents or after a Fierce pet levels up.</p>
       <div id="advisorContent"></div>
     </div>
     <div class="canvas-wrap" id="canvasWrap" title="Click and drag to move around the pedigree">

@@ -24,6 +24,13 @@ globalThis.BTStores=(()=>{
     keys(d.transport,['protocol','last_command'],'Transport');insist(d.transport.protocol===3&&Object.hasOwn(d.transport,'last_command'),'Transport protocol 3 required');
     insist(d.active_world===null||Object.hasOwn(d.worlds,d.active_world),'Invalid active world');
     for(const id of Object.keys(d.user_data.worlds))insist(Object.hasOwn(d.worlds,id),'Orphan world user_data');
+    const character=d.extensions.active_character;
+    if(character!==undefined){
+      insist(object(character),'Invalid active character context');
+      insist(character.name===null||typeof character.name==='string'&&character.name.trim()&&character.name.trim()!=='None','Invalid active character name');
+      insist(character.slot===null||Number.isInteger(character.slot)&&character.slot>=0,'Invalid active character slot');
+      insist(character.mutation_bonus_pct===null||typeof character.mutation_bonus_pct==='number'&&Number.isFinite(character.mutation_bonus_pct),'Invalid active character mutation bonus');
+    }
     const prospects=new Set();
     for(const [id,w]of Object.entries(d.worlds)){
       insist(Number.isSafeInteger(worldNumber(id))&&worldNumber(id)<d.next_world_id,'Invalid W-ID/world high-water');
@@ -34,6 +41,7 @@ globalThis.BTStores=(()=>{
       insist(object(d.user_data.worlds[id]),'Missing world user_data');
       const seen=new Set();
       for(const [petId,p]of Object.entries(w.pets)){
+        insist(p.fierce_mutation_bonus_pct===undefined||p.fierce_mutation_bonus_pct===null||typeof p.fierce_mutation_bonus_pct==='number'&&Number.isFinite(p.fierce_mutation_bonus_pct),'Invalid Fierce mutation bonus');
         const n=petId.startsWith(id+':P-')?Number(petId.slice(id.length+3)):NaN;
         insist(new RegExp('^'+id+':P-\\d+$').test(petId)&&Number.isSafeInteger(n)&&n<w.next_pet_id,'Invalid BT_ID/pet high-water');
         insist(['TRACKED','ACTIVE','ARCHIVED'].includes(p.lifecycle_state)&&['neutral','GESTATING','GROWING','RESTING'].includes(p.status_state),'Invalid pet lifecycle/status');

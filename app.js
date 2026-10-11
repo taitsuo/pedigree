@@ -276,9 +276,17 @@ function hasPetName(pet){
   const name=Object.hasOwn(pet||{},'icarusName')?pet.icarusName:pet?.name;
   return typeof name==='string'&&name.trim()!==''&&name.trim()!=='None';
 }
+function individualMutationBonus(pet){
+  if(!hasPetName(pet))return null;
+  const lineage=pet?.bloodline??pet?.lineage;
+  if(typeof lineage!=='string'||!lineage.trim()||['None','Unknown'].includes(lineage))return null;
+  if(lineage!=='Fierce')return 0;
+  const value=pet?.fierce_mutation_bonus_pct;
+  return typeof value==='number'&&Number.isFinite(value)?value:null;
+}
 function mutationBonusText(pet){
-  const value=pet?.genetics_mutation_chance_pct;
-  return typeof value==='number'&&Number.isFinite(value)?'+'+value+'%':'—';
+  const value=individualMutationBonus(pet);
+  return value===null?'—':'+'+value+'%';
 }
 function activityClass(n){return n.breedingActive?'active':'culled'}
 function activityLabel(n){return n.breedingActive?'Active':'Inactive'}
@@ -1255,7 +1263,7 @@ function advisorParentHtml(n,sex,group=null){
   const equivalents=Math.max(0,(group?.pets?.length||1)-1);
   return `<div class="advisor-parent ${sex}" data-select-pet="${esc(n.id)}" role="button" tabindex="0">
     <div class="advisor-parent-head">
-      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'} · Mutation bonus: ${mutationBonusText(n)}</div></div>
+      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'} · Individual mutation bonus: ${mutationBonusText(n)}</div></div>
       <span class="sex" style="color:var(--${sex==='female'?'female':'male'})">${sex==='female'?'♀':'♂'}</span>
     </div>
     <div class="stats">${advisorStatHtml(n)}</div>
@@ -1474,7 +1482,7 @@ function renderAdvisor(){
     const members=group?.pets?.length?group.pets:[sex==='female'?pair.female:pair.male];
     const buttons=members.map(member=>{
       const uid=stablePetId(member.bt_id);
-      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')} · Mutation bonus: ${mutationBonusText(member)}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
+      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(partnerNames)} · ${esc(member.bloodline||'Unknown')} · Individual mutation bonus: ${mutationBonusText(member)}</span></span><span class="advisor-alt-score" title="Best pairing score">${pair.score.toFixed(1)}</span></button>`;
     }).join('');
     return `<div class="advisor-alt-row ${members.length>1?'twins':''}">${buttons}</div>`;
   };
@@ -1689,7 +1697,7 @@ function renderSelectedDetail(id){
         <div class="item"><span class="label">${usefulLabel(nodeSpeciesKey(n))}</span><span class="value">${n.usefulScore??'—'}</span></div>
         <div class="item"><span class="label">Level</span><span class="value">${n.level??'—'}</span></div>
         <div class="item"><span class="label">Experience</span><span class="value">${n.experience??'—'}</span></div>
-        <div class="item"><span class="label">Mutation bonus</span><span class="value">${mutationBonusText(n)}</span></div>
+        <div class="item"><span class="label">Individual mutation bonus</span><span class="value">${mutationBonusText(n)}</span></div>
       </div>
       <div class="detail-fields">
         <label>Nickname<input data-detail-field="nickname" value="${esc(n.nickname||'')}" placeholder="Optional nickname"></label>
@@ -2214,7 +2222,7 @@ function applyCensus(document){
       twinSource:p.twin_source??null,motherLabel:p.mother||'',fatherLabel:p.father||'',
       icarusName:p.name,
       name:canonicalName(p.name)||'Unnamed',
-      genetics_mutation_chance_pct:p.genetics_mutation_chance_pct,
+      fierce_mutation_bonus_pct:p.fierce_mutation_bonus_pct,
       actor_class:p.actor_class||'',
       species_key:species,
       sex:p.sex==='Female'?'F':p.sex==='Male'?'M':'?',
@@ -2356,7 +2364,17 @@ function stashWorldDraft(){
   BTView.drafts.set(draftKey(BTView.world),{payload,base:BTData.copy(BTView.base),pairBase:BTData.copy(BTView.pairBase),
     dirty:userDataDirty,pairDirty:breedingPanelDirty,selected,species:currentSpecies,view:BTData.copy(activeView),advisor:BTData.copy(advisorState)});
 }
+function updateCharacterControl(){
+  const d=BTView.document,character=d?.extensions?.active_character;
+  const reliable=character&&BTView.world===d.active_world
+    &&selectedDataset?.account_id===d.account.steam_id;
+  const name=reliable&&typeof character.name==='string'&&character.name.trim()&&character.name.trim()!=='None'?character.name:'—';
+  const bonus=reliable&&name!=='—'&&typeof character.mutation_bonus_pct==='number'&&Number.isFinite(character.mutation_bonus_pct)
+    ?'+'+character.mutation_bonus_pct+'%':'—';
+  document.getElementById('characterState').textContent=name+' ('+bonus+' mutation bonus)';
+}
 function updateWorldControls(){
+  updateCharacterControl();
   const d=BTView.document,select=document.getElementById('worldSelect');
   const chosen=BTView.pinnedWorld||'';
   select.replaceChildren(new Option('Active world',''));
@@ -3040,10 +3058,12 @@ function updateAccountControls(){
   accountSelect.replaceChildren(new Option('Select account',''));
   for(const d of availableDatasets)accountSelect.add(new Option(d.label,d.filename));
   accountSelect.value=selectedDataset?.filename||'';
+  updateCharacterControl();
 }
 accountSelect.addEventListener('change',async()=>{
   if(refreshInFlight||BTView.saving){updateAccountControls();return}
   selectedDataset=availableDatasets.find(d=>d.filename===accountSelect.value)||null;
+  updateCharacterControl();
   lastLocalStateSignature=null;
   await refreshJson();
 });

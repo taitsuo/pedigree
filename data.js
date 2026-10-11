@@ -13,9 +13,15 @@ globalThis.BTData=(()=>{
       ||JSON.stringify(d.genetics_order)!=='["V","F","P","R","T","A","I"]')throw new Error('Breeding Tool V4 account dataset required');
     if(d.document_kind!=='active'||typeof d.account?.steam_id!=='string'||!/^\d{17}$/.test(d.account.steam_id)||typeof d.account?.steam_user!=='string'||!d.account.steam_user)throw new Error('Invalid account dataset');
     if(d.active_world!==null&&!d.worlds[d.active_world])throw new Error('Invalid active world');
+    const character=d.extensions?.active_character;
+    if(character!==undefined&&(!isObject(character)
+      ||!(character.name===null||typeof character.name==='string'&&character.name.trim()&&character.name.trim()!=='None')
+      ||!(character.slot===null||Number.isInteger(character.slot)&&character.slot>=0)
+      ||!(character.mutation_bonus_pct===null||typeof character.mutation_bonus_pct==='number'&&Number.isFinite(character.mutation_bonus_pct))))throw new Error('Invalid active character context');
     for(const w of Object.values(d.worlds)){
       if(!isObject(w.pets)||!isObject(w.runtime?.pending_gestations)||w.runtime.identity_redirects!==undefined)throw new Error('Invalid V4 world');
       for(const p of Object.values(w.pets)){
+        if(p.fierce_mutation_bonus_pct!==undefined&&p.fierce_mutation_bonus_pct!==null&&!(typeof p.fierce_mutation_bonus_pct==='number'&&Number.isFinite(p.fierce_mutation_bonus_pct)))throw new Error('Invalid Fierce mutation bonus');
         if(!['TRACKED','ACTIVE','ARCHIVED'].includes(p.lifecycle_state))throw new Error('Invalid lifecycle');
         if(['presence','previous_name','last_seen','field_sources','lifecycle_evidence'].some(k=>k in p))throw new Error('Retired pet fields: amend dataset manually');
       }
