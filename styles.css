@@ -204,17 +204,7 @@ svg{display:block;min-width:100%;}
 .status-chip.active{color:#cce6c2;border-color:#668459;background:#243120}
 .status-chip.inactive{color:#b8b5aa;border-color:#5c5c54;background:#252621}
 .view-actions{display:flex;gap:7.7px;align-items:center}
-.useful-config{display:none;margin:-4.4px 0 15.4px;padding:12.1px 48.4px 12.1px 14.3px;border:1.1px solid #66583d;border-radius:5.5px;background:#211f18;align-items:center;gap:13.2px;flex-wrap:wrap}
-.customizable-blocks{display:flex;flex-direction:column}.movable-block{position:relative}.block-drag-handle{position:absolute;z-index:8;top:7.7px;right:8.8px;display:flex;align-items:center;justify-content:center;width:26.4px;height:26.4px;padding:0;border:1.1px solid #4d5042;border-radius:4.4px;background:#191c17;color:#858475;font-size:14.3px;cursor:grab;user-select:none}.block-drag-handle:active{cursor:grabbing}.movable-block.block-dragging{opacity:.45}.movable-block.block-drop-target{outline:1.1px dashed #c99a5e;outline-offset:3.3px}.context-block{margin:0 0 13.2px;padding:2.2px 11px;border:1.1px solid #3d4034;border-radius:6.6px;background:#191c17}.context-block .category-species{padding-right:37.4px}.breeding-pair-panel .block-drag-handle{top:5.5px}.detail-toolbar .block-drag-handle{top:6.6px}.useful-config .block-drag-handle{top:5.5px}.movable-block>.collapse-toggle{right:46.2px}
-.useful-config.visible{display:flex}
-.sticky-tools .useful-config{margin:0;padding-right:14.3px;border-top:0;border-radius:0 0 6.6px 6.6px;box-shadow:none}
-.sticky-tools:has(.useful-config.visible) .global-toolbar{border-radius:0}
-.sticky-tools .useful-config .block-drag-handle{display:none}
-.useful-config strong{font-size:13.2px}
-.useful-config .help{font-size:11px;color:var(--muted);flex-basis:100%}
-.useful-checks{display:flex;gap:6.6px;flex-wrap:wrap}
-.useful-check{display:flex;align-items:center;gap:5.5px;border:1.1px solid var(--border);border-radius:4.4px;padding:6.6px 8.8px;background:#181a15;font-size:12.1px;cursor:pointer}
-.useful-check:has(input:checked){border-color:#6f966c;background:#263423;color:#d8ebd0}
+.customizable-blocks{display:flex;flex-direction:column}.movable-block{position:relative}.block-drag-handle{position:absolute;z-index:8;top:7.7px;right:8.8px;display:flex;align-items:center;justify-content:center;width:26.4px;height:26.4px;padding:0;border:1.1px solid #4d5042;border-radius:4.4px;background:#191c17;color:#858475;font-size:14.3px;cursor:grab;user-select:none}.block-drag-handle:active{cursor:grabbing}.movable-block.block-dragging{opacity:.45}.movable-block.block-drop-target{outline:1.1px dashed #c99a5e;outline-offset:3.3px}.context-block{margin:0 0 13.2px;padding:2.2px 11px;border:1.1px solid #3d4034;border-radius:6.6px;background:#191c17}.context-block .category-species{padding-right:37.4px}.breeding-pair-panel .block-drag-handle{top:5.5px}.detail-toolbar .block-drag-handle{top:6.6px}.movable-block>.collapse-toggle{right:46.2px}
 
 @media(max-width:1100px){
  .detail-card{grid-template-columns:1fr 1.6fr}
@@ -335,8 +325,7 @@ svg{display:block;min-width:100%;}
 :root[data-theme]:not([data-theme="default"]) .tab,
 :root[data-theme]:not([data-theme="default"]) .category-hide,
 :root[data-theme]:not([data-theme="default"]) .advisor-stat-toggle,
-:root[data-theme]:not([data-theme="default"]) .advisor-role-option,
-:root[data-theme]:not([data-theme="default"]) .useful-check{background:var(--theme-subtle)}
+:root[data-theme]:not([data-theme="default"]) .advisor-role-option{background:var(--theme-subtle)}
 :root[data-theme]:not([data-theme="default"]) .tab.active,
 :root[data-theme]:not([data-theme="default"]) .category-item .category-tab.active,
 :root[data-theme]:not([data-theme="default"]) .view-tab.active{background:var(--theme-selected)}
@@ -402,11 +391,10 @@ svg{display:block;min-width:100%;}
 :root[data-theme]:not([data-theme="default"]) .breeding-table tbody tr.selected-row{background:var(--theme-selected);box-shadow:inset 3.3px 0 0 var(--theme-accent)}
 :root[data-theme]:not([data-theme="default"]) .board-pet-name{color:var(--text)}
 :root[data-theme]:not([data-theme="default"]) .board-pet-uid{color:var(--muted)}
-:root[data-theme]:not([data-theme="default"]) .useful-config{border-color:var(--border);background:var(--theme-toolbar2)}
 :root[data-theme]:not([data-theme="default"]) .theme-option.active{color:var(--theme-title);text-decoration-color:var(--theme-accent)}
 :root[data-theme]:not([data-theme="default"]) .theme-option:focus-visible{outline-color:var(--theme-accent)}
 
-:root[data-theme]:not([data-theme="default"]) :is(.tool-nav,.global-toolbar,.context-block,.mainpanel,.detail,.detail-toolbar,.advisor-parent,.advisor-objective,.advisor-alt,.advisor-stat-reference,.advisor-stat-picker,.advisor-model-note,.advisor-role-row,.advisor-stat-ref-detail,.advisor-offspring-stat,.advisor-offspring-bloodline,.breeding-pair-slot,.useful-config,.table-wrap,.breeding-options){background-image:var(--theme-surface-texture);background-size:var(--theme-texture-size);background-blend-mode:var(--theme-texture-blend)}
+:root[data-theme]:not([data-theme="default"]) :is(.tool-nav,.global-toolbar,.context-block,.mainpanel,.detail,.detail-toolbar,.advisor-parent,.advisor-objective,.advisor-alt,.advisor-stat-reference,.advisor-stat-picker,.advisor-model-note,.advisor-role-row,.advisor-stat-ref-detail,.advisor-offspring-stat,.advisor-offspring-bloodline,.breeding-pair-slot,.table-wrap,.breeding-options){background-image:var(--theme-surface-texture);background-size:var(--theme-texture-size);background-blend-mode:var(--theme-texture-blend)}
 :root[data-theme]:not([data-theme="default"]) .breeding-pair-panel{background-image:var(--theme-surface-texture),var(--theme-pair-gradient);background-size:var(--theme-texture-size),100% 100%;background-blend-mode:var(--theme-texture-blend),normal}
 :root[data-theme]:not([data-theme="default"]) .advisor-wrap{background-image:var(--theme-surface-texture),var(--theme-panel-gradient);background-size:var(--theme-texture-size),100% 100%;background-blend-mode:var(--theme-texture-blend),normal}
 :root[data-theme]:not([data-theme="default"]) .advisor-result{background-image:var(--theme-surface-texture),linear-gradient(180deg,var(--theme-selected),var(--theme-toolbar2));background-size:var(--theme-texture-size),100% 100%;background-blend-mode:var(--theme-texture-blend),normal}
@@ -484,9 +472,7 @@ svg{display:block;min-width:100%;}
    visual thickness does not change layout measurements or drag positions. */
 :root[data-theme]:not([data-theme="default"]) :is(
   .context-block,
-  .breeding-pair-panel,
-  .useful-config,
-  .detail-shell,
+  .breeding-pair-panel,  .detail-shell,
   .mainpanel
 ){
   position:relative;
@@ -499,9 +485,7 @@ svg{display:block;min-width:100%;}
 
 :root[data-theme]:not([data-theme="default"]) :is(
   .context-block,
-  .breeding-pair-panel,
-  .useful-config,
-  .detail-shell,
+  .breeding-pair-panel,  .detail-shell,
   .mainpanel
 )::before{
   content:"";
@@ -562,9 +546,9 @@ svg{display:block;min-width:100%;}
 ){background-image:none}
 
 :root[data-theme="glass"] :is(.mainpanel,.context-block,.breeding-pair-panel,.detail-shell){backdrop-filter:blur(5.5px)}
-:root[data-theme="concrete"] :is(.context-block,.breeding-pair-panel,.useful-config,.detail-shell,.mainpanel),
-:root[data-theme="glass"] :is(.context-block,.breeding-pair-panel,.useful-config,.detail-shell,.mainpanel),
-:root[data-theme="aluminium"] :is(.context-block,.breeding-pair-panel,.useful-config,.detail-shell,.mainpanel){border-radius:2.2px}
+:root[data-theme="concrete"] :is(.context-block,.breeding-pair-panel,.detail-shell,.mainpanel),
+:root[data-theme="glass"] :is(.context-block,.breeding-pair-panel,.detail-shell,.mainpanel),
+:root[data-theme="aluminium"] :is(.context-block,.breeding-pair-panel,.detail-shell,.mainpanel){border-radius:2.2px}
 
 :root[data-theme="default"]{
   --material-surface:none;

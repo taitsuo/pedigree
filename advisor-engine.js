@@ -1,6 +1,6 @@
 'use strict';
 const AdvisorEngine=(()=>{
-  const defaults=Object.freeze({initial:2000,validation:20000,refined:100000,chunk:500,minimum:.05,alpha:.05,seed:20261011,cap:60,cacheLimit:256});
+  const defaults=Object.freeze({initial:2000,validation:20000,refined:100000,chunk:500,alpha:.05,seed:20261011,cap:60,cacheLimit:256});
   // Deterministic seed derivation; model-equivalent parents deliberately share streams.
   function seedOf(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
   let lastYield=0;
@@ -19,13 +19,15 @@ const AdvisorEngine=(()=>{
       const p=model.parents(pair.female.stats,pair.male.stats);
       return {...p,chanceMother:character+pair.female.bonus,chanceFather:character+pair.male.bonus};
     }
-    function stream(params,policy,kind){
+    function stream(params,policy,kind,source){
       const key=JSON.stringify([model.version,policy.id,policy.mask,policy.weights,params.weights,params.B0,params.chanceMother,params.chanceFather,cfg.cap,cfg.seed,kind]);
       if(!cache.has(key)){
         if(cache.size>=cfg.cacheLimit)cache.delete(cache.keys().next().value);
-        const law=model.budgetLaw(params.B0,model.options({chanceMother:params.chanceMother,chanceFather:params.chanceFather,cap:cfg.cap}));
+        // Discovery and validation have independent RNG/accumulators, but the
+        // exact selector and mutation-budget laws are identical and immutable.
+        const law=source?.law||model.budgetLaw(params.B0,model.options({chanceMother:params.chanceMother,chanceFather:params.chanceFather,cap:cfg.cap}));
         let mass=0;const cdf=law.requested.map(r=>(mass+=r.probability));
-        cache.set(key,{a:statistics.create(policy),rng:model.random(seedOf(key)),table:model.selectionLaw(params.weights).table,law,cdf});
+        cache.set(key,{a:statistics.create(policy),rng:model.random(seedOf(key)),table:source?.table||model.selectionLaw(params.weights).table,law,cdf});
       }
       return cache.get(key);
     }
@@ -38,17 +40,21 @@ const AdvisorEngine=(()=>{
       }
     }
     async function run(pairs,mask,character,{onProgress=()=>{}}={}){
-      const mine=++token,policy=quality.prepare(mask),alpha=cfg.alpha/(2*Math.max(1,pairs.length));
+      const mine=++token,policy=quality.prepare(mask);
+      // Keep 20k minimum for the existing serialized prediction provenance.
+      const stages=[...new Set([cfg.validation,cfg.refined])].sort((a,b)=>a-b),alpha=cfg.alpha/(2*Math.max(1,pairs.length)*stages.length);
       const rows=pairs.map(pair=>({pair,params:input(pair,character),parentBest:Math.max(policy.score(pair.female.stats),policy.score(pair.male.stats))}));
-      // Everyone gets both stages: no parental-score prefilter can lose a jackpot.
+      // Independent discovery is for provisional presentation only. Every pair
+      // enters validation; pruning uses validation mean bounds exclusively.
       for(const r of rows){r.discovery=stream(r.params,policy,'discovery');await extend(r.discovery,cfg.initial,mine)}
       if(mine!==token)throw new DOMException('Obsolete predictions','AbortError');
       onProgress({phase:'initial',rows:rows.map(r=>({pair:r.pair,...statistics.summarize(r.discovery.a,r.parentBest,{...cfg,alpha})})),final:false});
-      for(const r of rows){r.validation=stream(r.params,policy,'independent-validation');await extend(r.validation,cfg.validation,mine);r.result=statistics.summarize(r.validation.a,r.parentBest,{...cfg,alpha})}
-      const bestTarget=Math.max(...rows.map(r=>r.result.targetRaw),0),bestMeanLow=Math.max(...rows.map(r=>r.result.meanLow),0);
-      // Uniform upper bounds retain every plausible contender in either mode.
-      const contenders=rows.filter(r=>r.result.optimisticRaw>=bestTarget||r.result.meanHigh>=bestMeanLow);
-      for(const r of contenders){await extend(r.validation,cfg.refined,mine);r.result=statistics.summarize(r.validation.a,r.parentBest,{...cfg,alpha})}
+      let contenders=rows;
+      for(const n of stages){
+        for(const r of contenders){r.validation??=stream(r.params,policy,'independent-validation',r.discovery);await extend(r.validation,n,mine);r.result=statistics.summarize(r.validation.a,r.parentBest,{alpha})}
+        const bestLow=Math.max(...rows.map(r=>r.result.meanLow),0);
+        contenders=contenders.filter(r=>r.result.meanHigh>=bestLow);
+      }
       if(mine!==token)throw new DOMException('Obsolete predictions','AbortError');
       const result=rows.map(r=>({pair:r.pair,...r.result}));onProgress({phase:'complete',rows:result,final:true});return result;
     }
@@ -58,7 +64,7 @@ const AdvisorEngine=(()=>{
       if(mine!==token)throw new DOMException('Obsolete predictions','AbortError');
       return {pair,...statistics.summarize(s.a,Math.max(policy.score(pair.female.stats),policy.score(pair.male.stats)),{...cfg,alpha:cfg.alpha/(2*Math.max(1,pairCount))})};
     }
-    return Object.freeze({run,predict,cancel,config:cfg,metrics:()=>({simulated,cacheEntries:cache.size,aggregateBytes:[...cache.values()].reduce((n,s)=>n+s.a.scores.byteLength+s.a.byScore.byteLength,0)}),input});
+    return Object.freeze({run,predict,cancel,config:cfg,metrics:()=>({simulated,cacheEntries:cache.size,aggregateBytes:[...cache.values()].reduce((n,s)=>n+s.a.scores.byteLength+s.a.counts.byteLength,0)}),input});
   }
   return Object.freeze({create,defaults,seedOf});
 })();

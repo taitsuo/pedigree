@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V4.6.0</title>
+<title>Breeding Tool — V4.6.1</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="ui-p3.css">
 </head>
@@ -11,7 +11,7 @@
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V4.6.0</span></h1>
+    <h1>Breeding Tool <span class="version">V4.6.1</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -46,7 +46,6 @@
 <label>Account: <select class="control" id="accountSelect"><option value="">Select account</option></select></label>
 <span class="small character-context">| Character: <span id="characterState">—</span> |</span>
 <label>World: <select class="control" id="worldSelect"><option value="">Active world</option></select></label><span class="small" id="worldState"></span>
-    <button class="tab" id="usefulConfigBtn" title="Choose the priority stats used by scoring and color coding" aria-expanded="false">Priority stats</button>
     <button class="control" id="inactiveToggleBtn" title="Show pets excluded from breeding" aria-pressed="false">Show inactive</button>
   </div>
   <div class="global-toolbar-right">
@@ -72,11 +71,6 @@
     <div class="pair-grid"><div id="pair-female-body"></div><div id="pair-quality"></div><div id="pair-male-body"></div></div>
     <b id="nextFemaleName" hidden></b><b id="nextMaleName" hidden></b>
   </section>
-  <div class="useful-config movable-block" id="usefulConfig" data-block-id="priority-stats">
-    <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span><strong id="usefulConfigTitle">Breeding priorities</strong>
-    <div class="useful-checks" id="usefulChecks"></div><button class="control" id="usefulResetBtn">Reset V/F/P/R/T/A</button>
-    <span class="help">One shared selection per species: priority stats count toward the Priority score, drive green/red stat coloring, Advisor has separate MAX / IGNORE / MIN objectives.</span>
-  </div>
   <div class="detail-shell movable-block" id="detailShell" data-block-id="selected-pet">
     <div class="detail-toolbar"><span>Selected pet</span><span class="detail-collapse-summary" id="selectedPetSummary">No pet selected</span><button class="control detail-clear" id="clearBtn" title="Clear the current selection">Clear selection</button></div>
     <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span>
@@ -112,7 +106,7 @@
           <h2>Advisor</h2>
           <p>Short Term · next-generation average quality. Select a breeder to change only that side of Current Pair.</p>
         </div>
-        <span class="advisor-prototype-badge">Native predictions · V4.6.0</span>
+        <span class="advisor-prototype-badge">Native predictions · V4.6.1</span>
       </div>
       <div id="advisorSettings" hidden><div class="advisor-config-grid">
         <div class="advisor-config-main">
@@ -149,9 +143,9 @@
       <div class="table-hint">Lifecycle comes from BreedingTool. Archived animals remain in history; active adults are eligible for breeding. Nickname, role and personal breeding choices remain editable.</div>
     </div>
     <div class="legend">
-      <span><i class="dot" style="background:var(--female)"></i>maternal line</span>
-      <span><i class="dot" style="background:var(--male)"></i>paternal line</span>
-      <span id="siblingLegend"><i class="dot" style="background:#78ad72"></i>sibling link</span>
+      <span><svg class="legend-link" viewBox="0 0 30 8" aria-hidden="true"><path class="edge mother" d="M1 4H29"/></svg>maternal line</span>
+      <span><svg class="legend-link" viewBox="0 0 30 8" aria-hidden="true"><path class="edge father" d="M1 4H29"/></svg>paternal line</span>
+      <span id="siblingLegend"><svg class="legend-link" viewBox="0 0 30 8" aria-hidden="true"><path class="edge sibling" d="M1 4H29"/></svg>sibling link</span>
       <span><i class="dot" style="background:var(--active)"></i>active for breeding</span>
       <span><i class="dot" style="background:var(--culled)"></i>inactive for breeding</span>
     </div>
@@ -184,6 +178,7 @@
 <script src="advisor-quality.js"></script>
 <script src="advisor-statistics.js"></script>
 <script src="advisor-engine.js"></script>
+<script src="advisor-best.js"></script>
 <script src="bloodline-prediction.js"></script>
 <script src="hypothesis-lab.js"></script>
 <script src="experiment-ui.js"></script>
@@ -199,9 +194,8 @@
  document.querySelector('.global-toolbar-right').prepend(document.getElementById('inactiveToggleBtn'));
  const command=document.createElement('details');command.className='extra-commands';command.innerHTML='<summary>More</summary><div></div>';
  document.querySelector('.global-toolbar-right').append(command);
- for(const id of ['cancelCommandBtn','reloadChoicesBtn','disconnectBtn','usefulConfigBtn','experimentBtn'])command.lastElementChild.append(document.getElementById(id));
+ for(const id of ['cancelCommandBtn','reloadChoicesBtn','disconnectBtn','experimentBtn'])command.lastElementChild.append(document.getElementById(id));
  const reference=document.createElement('details');reference.className='genotype-reference-menu';reference.innerHTML='<summary>Genotype reference</summary>';reference.append(document.getElementById('advisorStatReference'));command.lastElementChild.append(reference);
- const priorities=document.getElementById('usefulConfig');priorities.querySelector('.help').textContent='Legacy binary priorities used by the Priority score. Advisor goals remain independent.';
  const pairActions=document.querySelector('.pair-heading .breeding-pair-actions');pairActions.innerHTML='<button class="control" id="recommendPairBtn">↺ Best pair</button><button class="control" id="clearBreedingPairBtn">Clear pair</button><button class="control primary-control" id="sendBreedingPairBtn" disabled>Send to Breeding Panel</button>';
  const main=document.querySelector('.mainpanel');main.dataset.blockId='main-view';main.classList.add('movable-block');
  const handle=document.createElement('span');handle.className='block-drag-handle';handle.draggable=true;handle.textContent='⠿';handle.title='Move workspace';main.prepend(handle);
