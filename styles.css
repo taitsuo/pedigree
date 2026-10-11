@@ -672,3 +672,10 @@ svg{display:block;min-width:100%;}
 
 /* Native predictions reuse the observed/expected chart palette. */
 .hyp-native-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.hyp-native-grid svg{display:block;width:100%;height:auto}.hyp-native-grid text{fill:var(--text,#ddd);font-size:11px}.hyp-native-distributions{margin-top:16px}[data-native-panel] .hyp-primary{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+
+.advisor-objectives{grid-template-columns:repeat(2,minmax(0,1fr))}
+.advisor-prediction-chart{display:block;min-width:0;width:100%;max-width:640px;max-height:320px;margin:auto;background:#111923;border-radius:8px}
+.advisor-prediction-chart text{fill:#e8edf3;text-anchor:middle;font:12px system-ui}
+.advisor-probability{font-size:12px;margin:8px 0}.advisor-probability small{display:block;color:var(--muted);font-size:11px}
+.advisor-offspring-preview details{margin:10px 0}.advisor-offspring-preview summary{cursor:pointer}
+.advisor-offspring-preview{display:block}.advisor-offspring-title{margin-bottom:12px}

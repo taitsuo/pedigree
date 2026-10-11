@@ -83,5 +83,5 @@ const NativeGenetics=(()=>{
     if(simulations.size>=16)simulations.delete(simulations.keys().next().value);simulations.set(key,job);
     try{return await job}catch(error){simulations.delete(key);throw error}
   }
-  return Object.freeze({randRange,select,selectionLaw,options,parents,budgetLaw,random,birth,run});
+  return Object.freeze({version:"native-reconstruction-v2.2",randRange,select,selectionLaw,options,parents,budgetLaw,random,birth,run});
 })();
