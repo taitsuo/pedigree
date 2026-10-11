@@ -3,14 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V4.5.1</title>
+<title>Breeding Tool — V4.6.0</title>
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="ui-p3.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V4.5.1</span></h1>
+    <h1>Breeding Tool <span class="version">V4.6.0</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -60,16 +61,16 @@
 <div class="customizable-blocks" id="customizableBlocks">
   <section class="movable-block context-block" id="contextBlock" data-block-id="context">
     <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span>
+    <div class="context-heading">Categories</div>
     <div class="category-zone category-species"><div class="category-label">Species</div><div class="tabs" id="speciesTabs"></div><div class="hidden-categories" id="hiddenSpecies"></div></div>
     <div class="category-zone category-bloodlines"><div class="category-label">Bloodlines</div><div class="tabs" id="bloodlineTabs"></div><div class="hidden-categories" id="hiddenBloodlines"></div></div>
     <div class="category-zone category-foundations"><div class="category-label">Foundations</div><div class="tabs" id="foundationTabs"></div><div class="hidden-categories" id="hiddenFoundations"></div></div>
   </section>
   <section class="breeding-pair-panel movable-block" id="breedingPairPanel" data-block-id="current-pair" aria-labelledby="breedingPairTitle">
     <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span>
-    <div><strong id="breedingPairTitle">Current Pair</strong><span class="small" id="breedingPairState"></span></div>
-    <div class="breeding-pair-slot female-slot"><span>Female</span><b id="nextFemaleName">Not selected</b></div><div class="breeding-pair-symbol">×</div>
-    <div class="breeding-pair-slot male-slot"><span>Male</span><b id="nextMaleName">Not selected</b></div>
-    <div class="breeding-pair-actions"><button class="control primary-control" id="sendBreedingPairBtn" disabled>Send to Breeding Panel</button><button class="control" id="clearBreedingPairBtn">Clear pair</button></div>
+    <div class="pair-heading"><strong id="breedingPairTitle">Current Pair</strong><span class="small" id="breedingPairState"></span><div class="breeding-pair-actions"></div></div>
+    <div class="pair-grid"><div id="pair-female-body"></div><div id="pair-quality"></div><div id="pair-male-body"></div></div>
+    <b id="nextFemaleName" hidden></b><b id="nextMaleName" hidden></b>
   </section>
   <div class="useful-config movable-block" id="usefulConfig" data-block-id="priority-stats">
     <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span><strong id="usefulConfigTitle">Breeding priorities</strong>
@@ -109,11 +110,11 @@
         <div>
           <div class="advisor-kicker">Pairing decision support</div>
           <h2>Advisor</h2>
-          <p>Choose Safe for the best average quality, or Gamble for the highest supported target with at least 5% chance. Predictions use the reconstructed native model. Click a candidate to change only that parent.</p>
+          <p>Short Term · next-generation average quality. Select a breeder to change only that side of Current Pair.</p>
         </div>
-        <span class="advisor-prototype-badge">Native predictions · V4.5.1</span>
+        <span class="advisor-prototype-badge">Native predictions · V4.6.0</span>
       </div>
-      <div id="advisorSettings"><div class="advisor-config-grid">
+      <div id="advisorSettings" hidden><div class="advisor-config-grid">
         <div class="advisor-config-main">
           <div class="advisor-role-row" id="advisorRoleRow" aria-label="Automatic breeding purpose"></div>
           <div class="advisor-objectives" id="advisorObjectives"></div>
@@ -183,8 +184,31 @@
 <script src="advisor-quality.js"></script>
 <script src="advisor-statistics.js"></script>
 <script src="advisor-engine.js"></script>
+<script src="bloodline-prediction.js"></script>
 <script src="hypothesis-lab.js"></script>
 <script src="experiment-ui.js"></script>
-  <script src="app.js"></script>
+<script>
+(()=>{
+ const sticky=document.querySelector('.sticky-tools'),toolbar=document.querySelector('.global-toolbar'),nav=document.querySelector('.tool-nav');
+ toolbar.insertBefore(nav,toolbar.querySelector('.global-toolbar-right'));
+ const goals=document.createElement('div');goals.className='sticky-goals';
+ goals.append(document.getElementById('advisorStatPicker'));sticky.append(goals);
+ const message=document.getElementById('advisorModelNote');goals.append(message);goals.append(document.getElementById('advisorMutationWarning'));
+ document.getElementById('advisorStatPicker').querySelector('.small')?.remove();
+ const left=document.querySelector('.global-toolbar-left');left.insertBefore(document.getElementById('worldSelect').closest('label'),left.querySelector('.character-context'));left.insertBefore(document.getElementById('worldState'),left.querySelector('.character-context'));left.append(document.getElementById('inactiveToggleBtn'));
+ document.querySelector('.global-toolbar-right').prepend(document.getElementById('inactiveToggleBtn'));
+ const command=document.createElement('details');command.className='extra-commands';command.innerHTML='<summary>More</summary><div></div>';
+ document.querySelector('.global-toolbar-right').append(command);
+ for(const id of ['cancelCommandBtn','reloadChoicesBtn','disconnectBtn','usefulConfigBtn','experimentBtn'])command.lastElementChild.append(document.getElementById(id));
+ const reference=document.createElement('details');reference.className='genotype-reference-menu';reference.innerHTML='<summary>Genotype reference</summary>';reference.append(document.getElementById('advisorStatReference'));command.lastElementChild.append(reference);
+ const priorities=document.getElementById('usefulConfig');priorities.querySelector('.help').textContent='Legacy binary priorities used by the Priority score. Advisor goals remain independent.';
+ const pairActions=document.querySelector('.pair-heading .breeding-pair-actions');pairActions.innerHTML='<button class="control" id="recommendPairBtn">↺ Best pair</button><button class="control" id="clearBreedingPairBtn">Clear pair</button><button class="control primary-control" id="sendBreedingPairBtn" disabled>Send to Breeding Panel</button>';
+ const main=document.querySelector('.mainpanel');main.dataset.blockId='main-view';main.classList.add('movable-block');
+ const handle=document.createElement('span');handle.className='block-drag-handle';handle.draggable=true;handle.textContent='⠿';handle.title='Move workspace';main.prepend(handle);
+ document.getElementById('customizableBlocks').append(main);
+ document.querySelector('.layout').remove();
+})();
+</script>
+<script src="app.js"></script>
 </body>
 </html>
