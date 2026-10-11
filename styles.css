@@ -679,3 +679,17 @@ svg{display:block;min-width:100%;}
 .advisor-probability{font-size:12px;margin:8px 0}.advisor-probability small{display:block;color:var(--muted);font-size:11px}
 .advisor-offspring-preview details{margin:10px 0}.advisor-offspring-preview summary{cursor:pointer}
 .advisor-offspring-preview{display:block}.advisor-offspring-title{margin-bottom:12px}
+
+/* V4.5.1 Advisor panels use the existing drag/collapse lifecycle. */
+.advisor-panel{position:relative;border:1px solid #ffffff26;border-radius:10px;padding:16px;margin:14px 0;background:#141c27}
+.advisor-panel-heading{display:flex;align-items:center;gap:12px;margin:0 36px 15px 0}
+.advisor-panel-heading .block-drag-handle{position:static;display:inline-block;cursor:grab;font-size:24px;opacity:.8}
+.advisor-stat-toggle.goal-max{background:#24533b;color:#baffd3;border-color:#50b77c}
+.advisor-stat-toggle.goal-ignore{background:#183c61;color:#bfdeff;border-color:#5298d6}
+.advisor-stat-toggle.goal-min{background:#602c31;color:#ffd0d4;border-color:#d6757e}
+.advisor-prediction-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);gap:22px;align-items:start}
+.advisor-prediction-chart{width:100%;max-height:none;max-width:800px;min-height:340px}
+.advisor-prediction-chart .advisor-chart-mean{text-anchor:start;font-size:11px;paint-order:stroke;stroke:#141c27;stroke-width:3px;stroke-linejoin:round}
+.advisor-bloodline-prediction{padding:18px;border:1px solid #ffffff26;border-radius:8px}
+.advisor-mutation-warning{padding:9px;border-left:3px solid #d6a14d;color:#efd7ad}
+@media(max-width:850px){.advisor-prediction-layout{grid-template-columns:1fr}.advisor-prediction-chart{min-height:270px}}

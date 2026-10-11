@@ -246,8 +246,6 @@ function initializeStaticCollapsibles(){
 
 function initializeAdvisorCollapsibles(){
   makeCollapsible(advisorStatPicker,'advisor-priority-picker',{keep:'strong',label:'Advisor priority stats'});
-  makeCollapsible(advisorContent.querySelector('.advisor-offspring-preview'),'advisor-offspring',{keep:'.advisor-offspring-title',label:'offspring preview'});
-  makeCollapsible(advisorContent.querySelector('.advisor-alternatives'),'advisor-candidates',{keep:'.advisor-alternatives-head',label:'Top candidates'});
 }
 
 const ADVISOR_OBJECTIVES=[
@@ -393,6 +391,9 @@ function normalizePreferences(value){
     advisorPurpose:value.advisorPurpose&&typeof value.advisorPurpose==='object'&&!Array.isArray(value.advisorPurpose)
       ? Object.fromEntries(Object.entries(value.advisorPurpose).filter(([,purpose])=>purpose==='combat'))
       : {},
+    advisorGoals:Object.fromEntries(Object.entries(value.advisorGoals||{}).filter(([,g])=>Array.isArray(g)&&g.length===7&&g.every(v=>['MAX','IGNORE','MIN'].includes(v))&&g.some(v=>v!=='IGNORE'))),
+    advisorPanelOrder:Array.isArray(value.advisorPanelOrder)?[...new Set(value.advisorPanelOrder.filter(id=>['advisor-main','advisor-offspring','advisor-candidates'].includes(id)))]:[],
+    advisorCollapsed:value.advisorCollapsed&&typeof value.advisorCollapsed==='object'?{...value.advisorCollapsed}:{},
     blockOrder:normalizeBlockOrder(value.blockOrder),
     navigation:{
       species:normalizeCategoryBucket(navigation.species),
@@ -1146,7 +1147,11 @@ function advisorEligibleBreeders(){
 }
 
 function advisorStatMask(){
-  return usefulMask(currentSpecies);
+  const saved=preferences.advisorGoals[currentSpecies];
+  if(saved)return [...saved];
+  const goals=AdvisorQuality.goals(usefulMask(currentSpecies));
+  preferences.advisorGoals[currentSpecies]=goals;
+  return [...goals];
 }
 
 
@@ -1248,7 +1253,7 @@ function advisorRefinePair(pair){
 }
 
 
-function advisorObjectiveNote(){return 'Native reconstruction · equal-weight Priority quality policy V1 · estimated rankings. Bloodlines and inbreeding do not affect scores.'}
+function advisorObjectiveNote(){return 'Native reconstruction · equal-weight MAX/IGNORE/MIN quality · next-generation estimates, not proven multigenerational optimization. Bloodlines and inbreeding do not affect scores.'}
 
 function advisorStatHtml(n){
   return (n.stats||Array(7).fill(null)).map((value,index)=>`<div class="stat ${statClass(index,value,nodeSpeciesKey(n))}"><label>${STAT_LABELS[index]}</label><b>${value??'—'}</b></div>`).join('');
@@ -1259,7 +1264,7 @@ function advisorParentHtml(n,sex,group=null){
   const equivalents=Math.max(0,(group?.pets?.length||1)-1);
   return `<div class="advisor-parent ${sex}" data-select-pet="${esc(n.id)}" role="button" tabindex="0">
     <div class="advisor-parent-head">
-      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} genetically equivalent sibling${equivalents===1?'':'s'} available`:''} · ${usefulLabel(nodeSpeciesKey(n))}: ${n.usefulScore??'—'} · Individual mutation bonus: ${mutationBonusText(n)}</div></div>
+      <div><h3>${esc(displayName(n))} (${esc(n.runtime_uid??'—')})</h3><div class="small">${esc(n.bloodline||'Unknown')}${equivalents?` · ${equivalents} same-genetics sibling${equivalents===1?'':'s'} available`:''} · Individual quality: ${AdvisorQuality.prepare(advisorStatMask()).display(AdvisorQuality.score(n.stats,advisorStatMask())).toFixed(2)} · Individual mutation bonus: ${mutationBonusText(n)}</div></div>
       <span class="sex" style="color:var(--${sex==='female'?'female':'male'})">${sex==='female'?'♀':'♂'}</span>
     </div>
     <div class="stats">${advisorStatHtml(n)}</div>
@@ -1351,16 +1356,17 @@ function advisorOffspringPreviewHtml(pair){
   if(gamble&&pair.provisional)return '<div class="advisor-offspring-preview">Target preview awaits independent confirmation.</div>';
   const p=gamble?r.gamble:r.safe,labels=['V','F','P','R','T','A','I'];
   const bars=p.stats.map((s,i)=>{
-    const x=65+i*65,y=v=>230-v*20;
-    const title=`${GENOTYPE_REFERENCE[i].name}: mean ${s.mean.toFixed(2)}, prediction range ${s.low}–${s.high}, observed interval coverage ${(s.coverage*100).toFixed(1)}%`;
-    return `<g><title>${esc(title)}</title><rect x="${x-17}" y="${y(s.mean)}" width="34" height="${s.mean*20}" fill="#ec963f"/><path d="M${x},${y(s.high)}V${y(s.low)}M${x-9},${y(s.high)}h18M${x-9},${y(s.low)}h18" stroke="#fff" stroke-width="2"/><text x="${x}" y="${Math.max(16,y(Math.max(s.mean,s.high))-10)}">${s.mean.toFixed(2)}</text><text x="${x}" y="250">${labels[i]}</text></g>`;
+    const x=65+i*65,y=v=>315-v*28;
+    const title=`${GENOTYPE_REFERENCE[i].name}: mean ${s.mean.toFixed(2)}; central 50% prediction interval ${s.low}–${s.high}; central 80% ${s.low80}–${s.high80}. Observed coverage ${(s.coverage*100).toFixed(1)}% / ${(s.coverage80*100).toFixed(1)}%.`;
+    return `<g><title>${esc(title)}</title><rect x="${x-17}" y="${y(s.mean)}" width="34" height="${s.mean*28}" fill="#ec963f"/><path d="M${x},${y(s.high)}V${y(s.low)}M${x-9},${y(s.high)}h18M${x-9},${y(s.low)}h18" stroke="#fff" stroke-width="2"/><text class="advisor-chart-mean" x="${x+8}" y="${y(s.mean)-7}">${s.mean.toFixed(2)}</text><text x="${x}" y="338">${labels[i]}</text></g>`;
   }).join('');
   return `<div class="advisor-offspring-preview"><div class="advisor-offspring-title"><strong>${gamble?'Successful births — conditional preview':'All births — statistical preview'}</strong><span>${gamble?`Mean quality among successful births: ${p.meanQuality.toFixed(2)} · minimum target: ${r.target.toFixed(2)}`:'Means are not guaranteed scores.'}</span></div>
-    <svg class="advisor-prediction-chart" viewBox="0 0 530 265" role="img" aria-label="Seven predicted genetic stats, orange means and white prediction ranges, scale 0 to 10">
-    ${[0,2,4,6,8,10].map(v=>`<g><path d="M35 ${230-v*20}H515" stroke="#ffffff18"/><text x="18" y="${234-v*20}">${v}</text></g>`).join('')}${bars}</svg>
-    <p class="small">Preview statistique : barres = moyennes prévues ; moustaches = plages probables (80 %). Chaque naissance reste aléatoire.</p>
-    <details class="small"><summary>Method and uncertainty${r.uncertain?' · target resolution uncertain':''}</summary><p>Each interval is individual; the seven ranges need not hold simultaneously. Discrete 10th–90th percentiles may cover more than 80%. ${gamble?'Only births meeting the target enter this chart.':''} ${r.n.toLocaleString()} independent validation births; seed ${advisorPredictionEngine.config.seed}. ${r.incomplete} births did not exhaust their requested budget within 300 attempts.</p>
-    <p>Gamble uses a simultaneous confidence band across thresholds, pairs and two fixed sample stages. Supported target lower probability bound: ${(Math.max(0,r.reachTarget.p-r.epsilon)*100).toFixed(2)}%. ${r.uncertain?'A higher target remains statistically unresolved; this is the highest supported target, not a proven exact 95th percentile.':''} Rankings are estimates; close couples may remain tied statistically.</p>
+    <div class="advisor-prediction-layout"><div><svg class="advisor-prediction-chart" viewBox="0 0 530 350" role="img" aria-label="Seven predicted genetic stats, orange means and white central 50 percent prediction intervals, scale 0 to 10">
+    ${Array.from({length:11},(_,v)=>`<g class="advisor-y-tick"><path d="M35 ${315-v*28}H515" stroke="#ffffff18"/><text x="18" y="${319-v*28}">${v}</text></g>`).join('')}${bars}</svg>
+    <p class="small">Barres orange : moyennes ; moustaches blanches : intervalle central de prédiction à 50 % (Q25–Q75). Tooltip : intervalle à 80 % (Q10–Q90).</p></div>
+    <aside class="advisor-bloodline-prediction"><h3>Bloodline prediction</h3><p>♀ ${esc(displayName(pair.female))}<br><strong>${esc(pair.female.bloodline||'Unknown')}</strong></p><p>♂ ${esc(displayName(pair.male))}<br><strong>${esc(pair.male.bloodline||'Unknown')}</strong></p><p class="small" data-bloodline-distribution="unknown">Distribution prédite encore inconnue.</p></aside></div>
+    <details class="small"><summary>Method and uncertainty${r.uncertain?' · target resolution uncertain':''}</summary><p>Prediction intervals describe individual births, not IC95 on estimates. Discrete quantiles may exceed nominal coverage; the seven intervals need not hold simultaneously. ${gamble?'Only births meeting the target enter this chart.':''} ${r.n.toLocaleString()} independent validation births; seed ${advisorPredictionEngine.config.seed}. ${r.incomplete} births did not exhaust their requested budget within 300 attempts.</p>
+    <p>Gamble retains a simultaneous confidence band across thresholds, pairs and two fixed sample stages. Supported target lower probability bound: ${(Math.max(0,r.reachTarget.p-r.epsilon)*100).toFixed(2)}%. ${r.uncertain?'A higher target remains statistically unresolved.':''} Rankings are estimates for the next generation; multigenerational optimality is not established.</p>
     <p>Native reconstruction assumes independent uniform CRT outputs. Stat-name mapping and cap 60 retain documented uncertainty; historical Δ−3 exceptions remain unresolved. Confidence intervals measure Monte Carlo uncertainty only, not agreement with Icarus.</p></details></div>`;
 }
 
@@ -1397,21 +1403,65 @@ function renderAdvisorControls(){
     renderAdvisor();
   }));
   advisorStatPicker.classList.add('visible');
-  const priorityMask=usefulMask(currentSpecies);
-  advisorStatToggles.innerHTML=STAT_LABELS.map((label,index)=>`<button type="button" class="advisor-stat-toggle ${priorityMask[index]?'active':''}" data-advisor-stat="${index}">${label}</button>`).join('');
+  const priorityMask=advisorStatMask();
+  advisorStatToggles.innerHTML=STAT_LABELS.map((label,index)=>`<button type="button" class="advisor-stat-toggle goal-${priorityMask[index].toLowerCase()}" data-advisor-stat="${index}" aria-label="${label}: ${priorityMask[index]}">${label} ${priorityMask[index]==='MAX'?'↑':priorityMask[index]==='MIN'?'↓':'•'} ${priorityMask[index]}</button>`).join('');
   advisorStatToggles.querySelectorAll('[data-advisor-stat]').forEach(button=>button.addEventListener('click',()=>{
     const index=Number(button.dataset.advisorStat);
-    const next=[...usefulMask(currentSpecies)];
-    next[index]=!next[index];
-    if(!next.some(Boolean))next[index]=true;
-    preferences.usefulStats[currentSpecies]=next;
+    const next=advisorStatMask();
+    const states=['MAX','IGNORE','MIN'];
+    next[index]=states[(states.indexOf(next[index])+1)%3];
+    if(next.every(v=>v==='IGNORE')){
+      advisorModelNote.textContent='At least one stat must remain MAX or MIN. Choose another objective before ignoring this stat.';
+      return;
+    }
+    preferences.advisorGoals[currentSpecies]=next;
     savePreferences();
     recomputeUsefulScores(currentSpecies);
     updateUsefulConfig();
     renderAdvisor();
   }));
+  const mutationWarning=document.getElementById('advisorMutationWarning');
+  mutationWarning.hidden=advisorCharacterBonus()!==0;
+  mutationWarning.textContent='Bonus mutation du personnage : 0 % — améliorations possibles, mais sans bonus de talent.';
   advisorModelNote.textContent=advisorObjectiveNote()+` Purpose: ${advisorRoleLabel()}. Purpose-specific score weighting is not active yet.`;
   renderAdvisorStatReference();
+}
+
+// Retain these live nodes across result HTML rebuilds; their controls are not cloned.
+const advisorSettings=document.getElementById('advisorSettings');
+const ADVISOR_PANEL_IDS=['advisor-main','advisor-offspring','advisor-candidates'];
+function organizeAdvisorPanels(){
+  const preview=advisorContent.querySelector('.advisor-offspring-preview');
+  const candidates=advisorContent.querySelector('.advisor-alternatives');
+  const primary=[...advisorContent.children].filter(n=>n!==preview&&n!==candidates);
+  advisorContent.replaceChildren();
+  for(const [id,title,nodes] of [
+    ['advisor-main','Advisor',[advisorSettings,...primary]],
+    ['advisor-offspring','Offspring prediction',preview?[preview]:[]],
+    ['advisor-candidates','Top candidates',candidates?[candidates]:[]]
+  ]){
+    const panel=document.createElement('section');panel.className='advisor-panel';panel.dataset.blockId=id;
+    panel.innerHTML=`<div class="advisor-panel-heading"><span class="block-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder ${title}">⠿</span><strong>${title}</strong></div>`;
+    panel.append(...nodes);advisorContent.append(panel);
+    collapsedBlocks.set(id,preferences.advisorCollapsed[id]===true);
+    makeCollapsible(panel,id,{keep:'.advisor-panel-heading',label:title,onChange:value=>{preferences.advisorCollapsed[id]=value;savePreferences()}});
+  }
+  initializeBlockOrdering(advisorContent,{
+    apply:()=>{for(const id of [...preferences.advisorPanelOrder,...ADVISOR_PANEL_IDS]){const p=advisorContent.querySelector(`[data-block-id="${id}"]`);if(p&&!p.dataset.ordered){p.dataset.ordered='1';advisorContent.append(p)}}},
+    save:()=>{preferences.advisorPanelOrder=[...advisorContent.children].map(p=>p.dataset.blockId);savePreferences()}
+  });
+  initializeAdvisorCollapsibles();
+}
+function advisorPairPrediction(pair){
+  const w=BTView.document.worlds[BTView.world],f=w.pets[pair.female.bt_id],m=w.pets[pair.male.bt_id];
+  return {schema:1,model:NativeGenetics.version,quality_policy:AdvisorQuality.id,
+    expected_quality:pair.prediction.average,expected_genetics:pair.prediction.safe.stats.map(s=>s.mean),
+    provenance:{account_id:BTView.document.account.steam_id,world:BTView.world,
+      female_bt_id:pair.female.bt_id,male_bt_id:pair.male.bt_id,
+      female_genetics:[...f.genetics],male_genetics:[...m.genetics],female_species:f.species_key||f.actor_class,male_species:m.species_key||m.actor_class,
+      female_bonus_pct:individualMutationBonus(pair.female),male_bonus_pct:individualMutationBonus(pair.male),
+      character_name:BTView.document.extensions.active_character.name,character_bonus_pct:advisorCharacterBonus(),
+      stat_goals:advisorStatMask(),goals_key:currentSpecies,samples:pair.prediction.n,cap:advisorPredictionEngine.config.cap}};
 }
 
 function renderAdvisor(){
@@ -1428,6 +1478,7 @@ function renderAdvisor(){
   countText.textContent=`${femaleCount} eligible F (${femaleGroups.length} genetic groups) · ${maleCount} eligible M (${maleGroups.length} genetic groups) · ${pairs.length} non-redundant pairs`;
   if(!pairs.length){
     advisorContent.innerHTML='<div class="advisor-empty" role="status">'+esc(error||(pending?'Calculating predictions… '+warning:warning||'No eligible pair.'))+'</div>';
+    organizeAdvisorPanels();
     return;
   }
 
@@ -1460,7 +1511,7 @@ function renderAdvisor(){
       const best=pairs.find(p=>stablePetId((sex==='female'?p.female:p.male).bt_id)===stablePetId(member.bt_id));
       if(!best)return '';
       const uid=stablePetId(member.bt_id);
-      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(displayName(sex==='female'?best.male:best.female))} (${esc((sex==='female'?best.male:best.female).runtime_uid??'—')}) · ${esc(member.bloodline||'Unknown')} · Individual mutation bonus: ${mutationBonusText(member)}</span></span><span class="advisor-alt-score" title="Best pairing score">${pending?'…':best.score.toFixed(2)}</span></button>`;
+      return `<button type="button" class="advisor-alt ${sex} ${uid===selectedUid?'selected':''}" data-advisor-candidate-side="${sex}" data-advisor-group="${esc(group?.key||'')}" data-advisor-uid="${esc(uid)}"><span class="advisor-alt-rank">#${index+1}</span><span class="advisor-alt-pair"><strong>${sex==='female'?'♀':'♂'} ${esc(displayName(member))} <span class="advisor-alt-uid">(${esc(member.runtime_uid??'—')})</span></strong><span>Best pairing: ${sex==='female'?'♂':'♀'} ${esc(displayName(sex==='female'?best.male:best.female))} (${esc((sex==='female'?best.male:best.female).runtime_uid??'—')}) · ${esc(member.bloodline||'Unknown')} · Individual mutation bonus: ${mutationBonusText(member)} · Pair quality: ${pending?'…':best.score.toFixed(2)}</span></span><span class="advisor-alt-score" title="Individual genetic quality">${AdvisorQuality.prepare(advisorStatMask()).display(AdvisorQuality.score(member.stats,advisorStatMask())).toFixed(2)}</span></button>`;
     }).join('');
     return `<div class="advisor-alt-row ${sex} ${members.length>1?'twins':''}">${buttons}</div>`;
   };
@@ -1471,14 +1522,14 @@ function renderAdvisor(){
       <div class="advisor-result">
         <div class="advisor-rank">${advisorState.manualPair?'Selected pair':'Recommended pair'} #${chosenRank}</div>
         <div class="small">${advisorState.objective==='gamble'?'Target quality':'Average quality'}</div><div class="advisor-score">${pending&&advisorState.objective==='gamble'?'…':chosen.score.toFixed(2)}</div>${advisorProbabilityHtml(chosen)}
-        <button type="button" class="control primary-control" id="advisorSendBtn">Send to Breeding Panel</button>
+        <button type="button" class="control primary-control" id="advisorSendBtn" ${pending?'disabled':''}>Send to Breeding Panel</button>
         <div class="advisor-send-state" id="advisorSendState"></div>
       </div>
       ${advisorParentHtml(chosen.male,'male',chosen.maleGroup)}
     </div>
     ${advisorOffspringPreviewHtml(chosen)}
     <div class="advisor-alternatives">
-      <div class="advisor-alternatives-head"><strong>Top candidates</strong><span>3 distinct female genetic groups + 3 distinct male genetic groups. Genetically equivalent siblings share one rank but remain separate clickable animals on the same line. Clicking one animal replaces only that parent; “Best pairing” never changes the opposite sex.</span></div>
+      <div class="advisor-alternatives-head"><strong>Top candidates</strong><span>3 distinct female genetic groups + 3 distinct male genetic groups. Same-genetics siblings share a visual row; different mutation bonuses are evaluated independently. Large scores show individual quality; ranking uses best pairing potential. Clicking one animal replaces only that parent; “Best pairing” never changes the opposite sex.</span></div>
       <div class="advisor-candidate-columns">
         <div class="advisor-candidate-group">
           <div class="advisor-candidate-group-head female">♀ Best females</div>
@@ -1490,7 +1541,7 @@ function renderAdvisor(){
         </div>
       </div>
     </div>`;
-  initializeAdvisorCollapsibles();
+  organizeAdvisorPanels();
   advisorContent.querySelectorAll('[data-advisor-candidate-side]').forEach(button=>button.addEventListener('click',()=>{
     const side=button.dataset.advisorCandidateSide;
     const groupKey=button.dataset.advisorGroup;
@@ -1516,7 +1567,7 @@ function renderAdvisor(){
   });
   document.getElementById('advisorSendBtn').addEventListener('click',async()=>{
     // Twins/equivalent siblings remain independent selectable animals; send the exact selected UIDs.
-    breedingPanel={female_bt_id:stablePetId(chosen.female.bt_id),male_bt_id:stablePetId(chosen.male.bt_id)};
+    breedingPanel={female_bt_id:stablePetId(chosen.female.bt_id),male_bt_id:stablePetId(chosen.male.bt_id),prediction:advisorPairPrediction(chosen)};
     breedingPanelDirty=true;
     renderBreedingPairPanel();
     refreshSelectedDetail();
@@ -2030,7 +2081,8 @@ function hydrateBreedingPanel(payload){
   const panel=payload?.breeding_panel;
   breedingPanel={
     female_bt_id:stablePetId(panel?.female_bt_id),
-    male_bt_id:stablePetId(panel?.male_bt_id)
+    male_bt_id:stablePetId(panel?.male_bt_id),
+    ...(panel?.prediction?{prediction:BTData.copy(panel.prediction)}:{})
   };
 }
 
@@ -2105,6 +2157,7 @@ function setBreedingSelection(n){
     activated=true;
   }
   breedingPanel[n.sex==='F'?'female_bt_id':'male_bt_id']=uid;
+  delete breedingPanel.prediction;
   breedingPanelDirty=true;
   renderBreedingPairPanel();
   if(activated){updateCategoryNavigation();render()}
@@ -2383,9 +2436,11 @@ async function sendBreedingPanel(){
   const dataset=selectedDataset;
   if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
   const world=BTView.world,submitted=BTData.copy(breedingPanel);
+  if(submitted.prediction&&!BTStores.predictionValid(BTView.document,world,submitted,preferences)){delete submitted.prediction;delete breedingPanel.prediction}
+  const additional=submitted.prediction?[{path:['worlds',world,'graph','preferences','advisorGoals'],value:BTData.copy(preferences.advisorGoals)}]:[];
   BTView.saving=true;
   try{
-    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'current_pair'],message=>breedingPairState.textContent=message);
+    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'current_pair'],message=>breedingPairState.textContent=message,additional);
     if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
       breedingPanelDirty=!BTData.same(breedingPanel,submitted);
       BTView.pairBase=submitted;

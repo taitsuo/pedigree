@@ -47,7 +47,7 @@ globalThis.BTData=(()=>{
       genetics:Array.isArray(p.genetics)&&p.genetics.length===7?p.genetics:Array(7).fill(null)
     }));
     return {schema:d.schema,schema_version:2,genetics_order:d.genetics_order,pets,user_data:{graph},
-      breeding_panel:{female_bt_id:resolve(w,u.current_pair?.female_bt_id),male_bt_id:resolve(w,u.current_pair?.male_bt_id)}};
+      breeding_panel:{...(u.current_pair?.prediction?{prediction:copy(u.current_pair.prediction)}:{}),female_bt_id:resolve(w,u.current_pair?.female_bt_id),male_bt_id:resolve(w,u.current_pair?.male_bt_id)}};
   }
   function diff(before,after,path=[]){
     const ops=[];
@@ -95,7 +95,7 @@ globalThis.BTData=(()=>{
     try{applyPendingOps(out.user_data,command.payload.ops)}catch{return out}
     return out;
   }
-  async function submit(directory,dataset,world,value,path,onQueued=()=>{}){
+  async function submit(directory,dataset,world,value,path,onQueued=()=>{},additional=[]){
     if(!directory)throw new Error('Connect the mod folder first');
     if(!safePath(path)||path[0]!=='worlds'||path[1]!==world)throw new Error('Unsupported save target');
     const permission=await directory.requestPermission({mode:'readwrite'});
@@ -125,6 +125,9 @@ globalThis.BTData=(()=>{
         try{applyPendingOps(pending,existing.payload.ops);mergedExisting=true}catch{}
       }
       setPath(pending,path,value);
+      for(const extra of additional){if(extra.path[0]!=='worlds'||extra.path[1]!==world)throw Error('Unsupported save target');setPath(pending,extra.path,extra.value)}
+      const pair=pending.worlds[world].current_pair;
+      if(pair?.prediction&&!BTStores.predictionValid({...latest,user_data:pending},world,pair))delete pair.prediction;
       const ops=diff(latest.user_data,pending,[]);
       if(!ops.length){
         if(mergedExisting||existing&&!existing.payload)await removeMailbox();

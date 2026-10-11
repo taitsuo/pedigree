@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V4.5.0 · P13</title>
+<title>Breeding Tool — V4.5.1</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V4.5.0 · P13</span></h1>
+    <h1>Breeding Tool <span class="version">V4.5.1</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -74,7 +74,7 @@
   <div class="useful-config movable-block" id="usefulConfig" data-block-id="priority-stats">
     <span class="block-drag-handle" draggable="true" title="Move block" aria-label="Move block">⠿</span><strong id="usefulConfigTitle">Breeding priorities</strong>
     <div class="useful-checks" id="usefulChecks"></div><button class="control" id="usefulResetBtn">Reset V/F/P/R/T/A</button>
-    <span class="help">One shared selection per species: priority stats count toward the Priority score, drive green/red stat coloring, and are used by Advisor when improving selected stats.</span>
+    <span class="help">One shared selection per species: priority stats count toward the Priority score, drive green/red stat coloring, Advisor has separate MAX / IGNORE / MIN objectives.</span>
   </div>
   <div class="detail-shell movable-block" id="detailShell" data-block-id="selected-pet">
     <div class="detail-toolbar"><span>Selected pet</span><span class="detail-collapse-summary" id="selectedPetSummary">No pet selected</span><button class="control detail-clear" id="clearBtn" title="Clear the current selection">Clear selection</button></div>
@@ -111,16 +111,16 @@
           <h2>Advisor</h2>
           <p>Choose Safe for the best average quality, or Gamble for the highest supported target with at least 5% chance. Predictions use the reconstructed native model. Click a candidate to change only that parent.</p>
         </div>
-        <span class="advisor-prototype-badge">Advisor prototype P13 · native predictions</span>
+        <span class="advisor-prototype-badge">Native predictions · V4.5.1</span>
       </div>
-      <div class="advisor-config-grid">
+      <div id="advisorSettings"><div class="advisor-config-grid">
         <div class="advisor-config-main">
           <div class="advisor-role-row" id="advisorRoleRow" aria-label="Automatic breeding purpose"></div>
           <div class="advisor-objectives" id="advisorObjectives"></div>
           <div class="advisor-stat-picker" id="advisorStatPicker">
-            <strong>Priority stats</strong>
+            <strong>Stat goals · MAX / IGNORE / MIN</strong>
             <div id="advisorStatToggles"></div>
-            <span class="small">Shared with the Priority stats control above: this same selection drives the score and green/red stat coloring everywhere.</span>
+            <span class="small">Click to cycle ↑ MAX → • IGNORE → ↓ MIN. At least one objective is required. IGNORE still participates in native reproduction. Saved separately from the binary Priority stats in other views.</span>
           </div>
           <div class="advisor-model-note" id="advisorModelNote"></div>
         </div>
@@ -131,6 +131,7 @@
         </aside>
       </div>
       <p class="small"><strong>Character and individual mutation bonuses are separate.</strong><br>The character bonus comes from the local player’s Genetics talents. A Fierce pet’s individual bonus comes from its native Bloodline growth curve at the last refreshed level; other known Bloodlines contribute 0%. Use Manual Refresh after changing talents or after a Fierce pet levels up.</p>
+      <p id="advisorMutationWarning" class="small advisor-mutation-warning" hidden></p></div>
       <div id="advisorContent"></div>
     </div>
     <div class="canvas-wrap" id="canvasWrap" title="Click and drag to move around the pedigree">

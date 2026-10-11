@@ -19,8 +19,8 @@ const AdvisorStatistics=(()=>{
     const n=tail(a,threshold),counts=Array.from({length:7},()=>Array(11).fill(0));let sumQ=0;
     for(let q=threshold;q<a.scores.length;q++){sumQ+=q*a.scores[q];for(let i=0;i<7;i++)for(let v=0;v<11;v++)counts[i][v]+=a.byScore[q*77+i*11+v]}
     return {n,meanQuality:n?a.policy.display(sumQ/n):null,stats:counts.map(h=>{
-      const low=quantile(h,.1),high=quantile(h,.9);
-      return {mean:n?h.reduce((s,c,v)=>s+c*v,0)/n:null,low,high,coverage:n?h.slice(low,high+1).reduce((s,c)=>s+c,0)/n:0,counts:h};
+      const low=quantile(h,.25),high=quantile(h,.75),low80=quantile(h,.1),high80=quantile(h,.9);
+      return {mean:n?h.reduce((s,c,v)=>s+c*v,0)/n:null,low,high,low80,high80,coverage80:n?h.slice(low80,high80+1).reduce((s,c)=>s+c,0)/n:0,coverage:n?h.slice(low,high+1).reduce((s,c)=>s+c,0)/n:0,counts:h};
     })};
   }
   function summarize(a,parentBest,{minimum=.05,alpha=.05}={}){

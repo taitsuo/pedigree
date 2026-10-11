@@ -17,6 +17,35 @@ globalThis.BTStores=(()=>{
   const dataKeys=[...envelope,'schema','schema_version','genetics_order','active_world','next_world_id','user_data','transport','extensions','archived_preferences','archived_transport','archived_extensions','archived_active_world'];
   const worldNumber=id=>/^W-\d+$/.test(id)?Number(id.slice(2)):NaN;
   const uid=x=>typeof x==='string'&&/^\d+$/.test(x);
+  // Provenance comparison only: no reproduction or quality calculation here.
+  const vector=(x,integerOnly=false)=>Array.isArray(x)&&x.length===7&&x.every(v=>Number.isFinite(v)&&v>=0&&v<=10&&(!integerOnly||Number.isInteger(v)));
+  const goalVector=x=>Array.isArray(x)&&x.length===7&&x.every(v=>['MAX','IGNORE','MIN'].includes(v))&&x.some(v=>v!=='IGNORE');
+  function predictionShape(p){
+    const v=p?.provenance;
+    return object(p)&&p.schema===1&&typeof p.model==='string'&&typeof p.quality_policy==='string'&&Number.isFinite(p.expected_quality)&&p.expected_quality>=0&&p.expected_quality<=100&&vector(p.expected_genetics)&&object(v)
+      &&['account_id','world','female_bt_id','male_bt_id','goals_key','female_species','male_species','character_name'].every(k=>typeof v[k]==='string')
+      &&vector(v.female_genetics,true)&&vector(v.male_genetics,true)&&goalVector(v.stat_goals)
+      &&['character_bonus_pct','female_bonus_pct','male_bonus_pct'].every(k=>Number.isFinite(v[k])&&v[k]>=0)
+      &&Number.isInteger(v.samples)&&v.samples>=20000&&v.cap===60;
+  }
+  function predictionValid(d,key,pair,overridePreferences){
+    const p=pair?.prediction,v=p?.provenance,w=d.worlds?.[key],c=d.extensions?.active_character;
+    if(!predictionShape(p)||p.model!=='native-reconstruction-v2.2'||p.quality_policy!=='max-ignore-min-v2'||!w||d.active_world!==key||!c||!c.name||c.name==='None')return null;
+    if(v.account_id!==d.account.steam_id||v.world!==key||v.character_name!==c.name||v.character_bonus_pct!==c.mutation_bonus_pct)return null;
+    const pref=overridePreferences||{...d.user_data.preferences,...d.user_data.worlds[key]?.graph?.preferences};
+    let goals=pref.advisorGoals?.[v.goals_key];
+    if(!goals){const m=pref.usefulStats?.[v.goals_key]||[true,true,true,true,true,true,false];goals=m.map(x=>x?'MAX':'IGNORE')}
+    if(!equal(goals,v.stat_goals))return null;
+    for(const side of ['female','male']){
+      const id=pair[side+'_bt_id'],pet=w.pets[id];
+      if(id!==v[side+'_bt_id']||!pet||pet.lifecycle_state!=='ACTIVE'||pet.death?.status==='dead'||pet.stage!=='adult'||!pet.name||pet.name.trim()==='None'||!pet.name.trim())return null;
+      if(!equal(pet.genetics,v[side+'_genetics'])||(pet.species_key||pet.actor_class)!==v[side+'_species'])return null;
+      const b=pet.lineage==='Fierce'?pet.fierce_mutation_bonus_pct:typeof pet.lineage==='string'&&pet.lineage.trim()&&!['Unknown','None'].includes(pet.lineage)?0:null;
+      if(b===null||b===undefined||b!==v[side+'_bonus_pct'])return null;
+    }
+    return p;
+  }
+
   function logical(d){
     insist(d.schema==='BTPetCensus'&&d.schema_version===4&&equal(d.genetics_order,['V','F','P','R','T','A','I']),'V4 schema/genetics required');
     identity(d.account);insist(['active','archive'].includes(d.document_kind)&&integer(d.next_world_id),'Invalid logical document');
@@ -54,6 +83,7 @@ globalThis.BTStores=(()=>{
         for(const side of ['mother','father']){const r=p.parents?.[side];insist(object(r)&&(r.bt_id===null||Object.hasOwn(w.pets,r.bt_id)),'Missing/foreign parent');insist(r.observed_uid===undefined&&r.evidence===undefined,'Retired parent fields')}
       }
       const user=d.user_data.worlds[id];insist(object(user.graph)&&object(user.current_pair),'Invalid world graph/current_pair');
+      insist(user.current_pair.prediction===undefined||predictionShape(user.current_pair.prediction),'Invalid current_pair prediction');
       for(const side of ['female_bt_id','male_bt_id']){const petId=user.current_pair[side];insist(petId===null||typeof petId==='string'&&Object.hasOwn(w.pets,petId),'Invalid current_pair reference')}
       for(const [mother,father]of Object.entries(w.runtime.pending_gestations))insist(Object.hasOwn(w.pets,mother)&&Object.hasOwn(w.pets,father),'Invalid pending gestation reference');
     }
@@ -156,5 +186,5 @@ globalThis.BTStores=(()=>{
     }
     return found.sort((a,b)=>a.label.localeCompare(b.label));
   }
-  return {rebuild,logical,read,discover,fromSnapshot,parse};
+  return {rebuild,logical,read,discover,fromSnapshot,parse,predictionShape,predictionValid};
 })();
