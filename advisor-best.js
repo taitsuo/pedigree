@@ -18,7 +18,7 @@ const AdvisorBest=(()=>{
    const g=decode(data.genotypes[at]),score=policy.score(g);let sum=0;
    for(let i=0;i<7;i++){sum+=g[i]}
    counts[score]++;
-   if(sum===data.budget.budget)representatives[score]=Math.min(representatives[score],data.genotypes[at]);
+   if(sum===data.budget.budget&&representatives[score]===Infinity)representatives[score]=data.genotypes[at];
   }
   let k=0;for(let score=policy.maxRaw;score>=0;score--){
    k+=counts[score];if(k<required||!Number.isFinite(representatives[score]))continue;

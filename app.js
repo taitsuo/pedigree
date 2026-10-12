@@ -1236,14 +1236,14 @@ function advisorPairs(){
   }).catch(error=>{if(error.name==='AbortError'||advisorPredictionJob!==job)return;job.error=error.message;if(activeView.kind==='advisor')renderAdvisor()});
  }
  const result=advisorPredictionCache.get(key);if(!result)return {...base,pending:!advisorPredictionJob?.error,error:advisorPredictionJob?.error,cacheKey:key};
- return {...base,pairs:result.rows.map(r=>({...r.pair,prediction:r,score:r.average,provisional:false})),catalogs:result.catalogs,pending:false,cacheKey:key,metrics:result.metrics};
+ return {...base,pairs:result.rows.map(r=>({...r.pair,rating:r,score:r.average,provisional:false})),catalogs:result.catalogs,pending:false,cacheKey:key,metrics:result.metrics};
 }
 async function loadSecondaryPartner(scope,entry,side){
  const key=scope.cacheKey+'|'+side+'|'+entry.key;if(secondaryPartners.has(key))return;
  const state={pending:true,best:new Map()};if(secondaryPartners.size>=64)secondaryPartners.delete(secondaryPartners.keys().next().value);secondaryPartners.set(key,state);
  const goals=advisorStatMask(),character=advisorCharacterBonus();renderAdvisor();
  for(const pair of scope.rawPairs.filter(p=>p[side+'Group'].key===entry.key)){
-  const prediction=PairScoring.evaluate(PairScoring.input(preparedPair(pair),character),goals),row={...pair,prediction,score:prediction.average};
+  const rating=PairScoring.scoreForGoals(PairScoring.input(preparedPair(pair),character),goals),row={...pair,rating,score:rating.average};
   const uid=pair[side].bt_id,old=state.best.get(uid);if(!old||row.score>old.score||(row.score===old.score&&row.key<old.key))state.best.set(uid,row);
   await new Promise(r=>setTimeout(r,0));
   if(advisorPairs().cacheKey!==scope.cacheKey){secondaryPartners.delete(key);return}
@@ -1464,6 +1464,7 @@ function organizeAdvisorPanels(markup){
   restoreAdvisorDetails();
 }
 function advisorPairPrediction(pair){
+ const complete=currentPairResult(pair.female,pair.male);if(!complete)return null;pair=complete;
   const w=BTView.document.worlds[BTView.world],f=w.pets[pair.female.bt_id],m=w.pets[pair.male.bt_id];
   return {schema:2,model:PairScoring.version,quality_policy:GeneticQuality.id,
     units:'useful-genetic-points',maximum_quality:pair.prediction.maxQuality,expected_budget:pair.prediction.averageBudget,expected_quality:pair.prediction.average,expected_genetics:[...pair.prediction.means],
@@ -1483,12 +1484,12 @@ function renderAdvisor(){
  const strategyHtml='<div class="advisor-strategy" role="group" aria-label="Ranking strategy">Strategy: '+[['all-pairs','All Pairs'],['progressive','Progressive']].map(([id,label])=>'<button type="button" data-ranking-strategy="'+id+'" aria-pressed="'+(preferences.advisorStrategy===id)+'">'+label+'</button>').join('')+'</div>';
  if(!pairs.length){organizeAdvisorPanels('<div class="advisor-alternatives">'+strategyHtml+'<p role="status">'+esc(error||(pending?'Calculating deterministic recommendations…':warning||'No eligible pair.'))+'</p></div>');bindStrategy();return}
  const selectedRaw=scope.rawPairs.find(p=>p.female.bt_id===breedingPanel.female_bt_id&&p.male.bt_id===breedingPanel.male_bt_id);
- const chosen=selectedRaw?{...selectedRaw,...currentPairResult(selectedRaw.female,selectedRaw.male)}:pairs[0];
+ const chosen=selectedRaw?{...selectedRaw,...currentPairResult(selectedRaw.female,selectedRaw.male)}:{...pairs[0],...currentPairResult(pairs[0].female,pairs[0].male)};
  advisorState.chosenPairKey=chosen.key;
  function candidateRows(entry,index,side){
   const group=entry.group,members=group?.pets||[entry.pair[side]],secondary=secondaryPartners.get(scope.cacheKey+'|'+side+'|'+entry.key);
   return '<div class="advisor-alt-row '+side+(members.length>1?' twins':'')+'"><span class="advisor-alt-rank">'+(index<3?'#'+(index+1):'')+'</span><div class="candidate-members">'+members.map(member=>{
-   const best=secondary?.best.get(member.bt_id)||(entry.prediction?pairs.filter(p=>p[side].bt_id===member.bt_id).sort((a,b)=>b.score-a.score||a.key.localeCompare(b.key))[0]:null),partner=best?.[side==='female'?'male':'female'];
+   const best=secondary?.best.get(member.bt_id)||(entry.rating?pairs.filter(p=>p[side].bt_id===member.bt_id).sort((a,b)=>b.score-a.score||a.key.localeCompare(b.key))[0]:null),partner=best?.[side==='female'?'male':'female'];
    const info=partner?'Best: <span role="button" tabindex="0" data-inspect-uid="'+esc(partner.bt_id)+'">'+esc(displayName(partner))+' ('+esc(partner.runtime_uid??'—')+')</span> · '+qualityText(best.score):secondary?.pending?'Calculating best partner…':'<button type="button" data-load-partner="'+esc(entry.key)+'" data-partner-side="'+side+'">Calculate best partner</button>';
    return '<div role="button" tabindex="0" class="advisor-alt '+side+(member.bt_id===breedingPanel[side+'_bt_id']?' selected':'')+'" data-advisor-candidate-side="'+side+'" data-advisor-group="'+esc(entry.key)+'" data-advisor-uid="'+esc(member.bt_id)+'"><span class="advisor-alt-pair"><strong>'+esc(displayName(member))+' ('+esc(member.runtime_uid??'—')+')</strong><span>'+esc(member.bloodline||'Unknown')+' · Mut '+mutationBonusText(member)+'</span><span class="best-partner">'+info+'</span></span><span class="advisor-alt-score" title="Individual useful genetic points">'+qualityText(individualQuality(member))+'</span></div>';
   }).join('')+'</div></div>';

@@ -61,13 +61,24 @@ function bounds(q){let dp=new Float64Array(71);dp.fill(Infinity);dp[0]=0;
   }return t.values;
  }
  function mix(p,table,mask){let s=0;for(const r of p.law.requested)for(let i=0;i<7;i++)if(mask>>i&1)s+=r.probability*table[r.budget*7+i];return s}
- function means(p){
-  if(p.means)return p.means;
-  if(p.m.q.filter(v=>v>0).length===1){p.means=Object.freeze(Array.from(p.m.q,p=>p?10:0));p.exactMask=127;computed++;return p.means;}
-  let cm=0;for(let i=0;i<7;i++)if(p.global>config.tolerance&&Math.min(p.global,p.m.def[i])>config.tolerance/7)cm|=1<<i;
-  const b=conditional(p,127&~cm,'B2'),c=cm?conditional(p,cm,300):null,out=Array(7).fill(0);
-  for(const r of p.law.requested)for(let i=0;i<7;i++)out[i]+=r.probability*(cm>>i&1?c:b)[r.budget*7+i];
-  p.means=Object.freeze(out.map(v=>Math.max(0,Math.min(10,v))));p.exactMask=cm;computed++;return p.means;
+ // One column cache for ranking and complete predictions. Uncomputed columns
+ // stay private: only evaluate()/means() expose seven genetic expectations.
+ function ensureMeans(p,mask){
+  if(!p.values){p.values=Array(7).fill(0);p.bits=0;
+   p.exactMask=0;for(let i=0;i<7;i++)if(p.global>config.tolerance&&Math.min(p.global,p.m.def[i])>config.tolerance/7)p.exactMask|=1<<i;
+   if(p.m.q.filter(v=>v>0).length===1){p.values=Array.from(p.m.q,v=>v?10:0);p.bits=127;p.exactMask=127;}
+  }
+  const missing=mask&~p.bits;
+  if(missing){const cm=p.exactMask,b=conditional(p,missing&~cm,'B2'),c=(missing&cm)?conditional(p,missing&cm,300):null,out=Array(7).fill(0);
+   for(const r of p.law.requested)for(let i=0;i<7;i++)if(missing>>i&1)out[i]+=r.probability*(cm>>i&1?c:b)[r.budget*7+i];
+   for(let i=0;i<7;i++)if(missing>>i&1)p.values[i]=Math.max(0,Math.min(10,out[i]));p.bits|=missing;
+  }
+  if(p.bits===127&&!p.means){p.means=Object.freeze(p.values);computed++;}
+  return p.values;
+ }
+ function means(p){ensureMeans(p,127);return p.means;}
+ function scoreForGoals(params,goals){const policy=GeneticQuality.prepare(goals),p=context(params),values=ensureMeans(p,policy.bits);
+  return {model:version,key:p.key,average:policy.score([...values]),maxQuality:policy.maxRaw,empty:!policy.bits};
  }
  function evaluate(params,goals){const p=context(params),values=means(p),policy=GeneticQuality.prepare(goals),average=policy.score([...values]);
   return {model:version,key:p.key,means:values,average,averageBudget:values.reduce((s,v)=>s+v,0),requestedMean:p.requestedMean,maxQuality:policy.maxRaw,empty:!policy.bits,
@@ -75,6 +86,6 @@ function bounds(q){let dp=new Float64Array(71);dp.fill(Infinity);dp[0]=0;
  }
  function cheapBounds(p,mask){if(!mask)return {lo:0,hi:0};return {lo:Math.max(0,sum(p.lo,mask)),hi:Math.min(p.requestedMean-sum(p.lo,127^mask),sum(p.last,mask))}}
  function deficit(p,mask,horizon){let d=0;for(let i=0;i<7;i++)if((mask>>i&1)&&p.m.q[i]>0)d+=Math.max(0,10-p.m.curve[horizon*7+i]);return d}
- return Object.freeze({version,config,input,context,evaluate,means,bounds:cheapBounds,deficit,refine:(p,mask,T)=>mix(p,conditional(p,mask,T),mask),
+ return Object.freeze({version,config,input,context,scoreForGoals,evaluate,means,bounds:cheapBounds,deficit,refine:(p,mask,T)=>mix(p,conditional(p,mask,T),mask),
   metrics:()=>({models:models.size,pairs:pairs.size,computed,exactStats,infiniteStats})});
 })();

@@ -22,12 +22,44 @@ const NativeGenetics=(()=>{
     }
     return candidate;
   }
+  // Exact native acceptance masks, reconstructed from all 32768 CRT values.
+  // U and masks are lazy/bounded; the simulation table is built only on access.
+  let uniform=null;const acceptance=new Map(),maskLimit=2048;
+  function initUniform(){
+    if(uniform)return;
+    uniform=Array.from({length:7},()=>new Float32Array(size));
+    for(let k=0;k<size;k++){let seed=randRange(0,2147483646,k)>>>0;
+      for(let i=0;i<7;i++){seed=(Math.imul(seed,0x0BB38435)+0x3619636B)>>>0;uniform[i][k]=f32((seed>>>9)/8388608)}
+    }
+  }
+  function pop(x){x-=x>>>1&0x55555555;x=(x&0x33333333)+(x>>>2&0x33333333);return ((x+(x>>>4)&0x0f0f0f0f)*0x01010101)>>>24}
+  function maskedCounts(w){
+    initUniform();const prefix=[];let S=0;for(let i=0;i<7;i++){prefix[i]=S;S+=w[i]}
+    const remaining=new Uint32Array(size/32),counts=Array(7).fill(0);remaining.fill(0xffffffff);
+    for(let i=6;i>=0;i--){
+      if(!prefix[i]){for(const x of remaining)counts[i]+=pop(x);break;}
+      const key=i+','+prefix[i]+','+w[i];let mask=acceptance.get(key);
+      if(!mask){mask=new Uint32Array(size/32);const N=prefix[i]+w[i]+1;
+        for(let k=0;k<size;k++)if(f32(uniform[i][k]*f32(N))>=f32(prefix[i]))mask[k>>>5]|=1<<(k&31);
+        if(acceptance.size>=maskLimit)acceptance.delete(acceptance.keys().next().value);acceptance.set(key,mask);
+      }
+      for(let k=0;k<remaining.length;k++){counts[i]+=pop(mask[k]&remaining[k]);remaining[k]&=~mask[k]}
+    }
+    return counts;
+  }
   function selectionLaw(weights){
-    const key=weights.join(',');if(cache.has(key))return cache.get(key);
-    const table=new Uint8Array(size),counts=Array(7).fill(0);
-    for(let k=0;k<size;k++){const id=select(weights,k);table[k]=id;counts[id]++}
-    const result={table,counts,probabilities:counts.map(n=>n/size)};
-    if(cache.size>=64)cache.delete(cache.keys().next().value);cache.set(key,result);return result;
+    const key=weights.join(',');if(cache.has(key))return cache.get(key).result;
+    const w=Array.from(weights),entry={result:null,table:null};let counts;
+    if(w.length===7&&w.every(v=>Number.isInteger(v)&&v>=0)&&w.reduce((a,b)=>a+b,0)<=140)counts=maskedCounts(w);
+    else{counts=Array(7).fill(0);entry.table=new Uint8Array(size);for(let k=0;k<size;k++){const id=select(w,k);entry.table[k]=id;counts[id]++}}
+    entry.result={counts,probabilities:counts.map(n=>n/size)};
+    Object.defineProperty(entry.result,'table',{enumerable:true,get(){
+      if(!entry.table){entry.table=new Uint8Array(size);for(let k=0;k<size;k++)entry.table[k]=select(w,k)}return entry.table;
+    }});
+    if(cache.size>=64)cache.delete(cache.keys().next().value);cache.set(key,entry);return entry.result;
+  }
+  function cacheInfo(){let tables=0;for(const entry of cache.values())if(entry.table)tables++;
+    return {weights:cache.size,tables,tableBytes:tables*size,uniformBytes:uniform?7*size*4:0,acceptanceMasks:acceptance.size,acceptanceBytes:acceptance.size*(size/8),maskLimit};
   }
   function options(input={}){
     const o={chanceMother:0,chanceFather:0,cap:60,seed:20261010,samples:20000,...input};
@@ -83,5 +115,5 @@ const NativeGenetics=(()=>{
     if(simulations.size>=16)simulations.delete(simulations.keys().next().value);simulations.set(key,job);
     try{return await job}catch(error){simulations.delete(key);throw error}
   }
-  return Object.freeze({version:"native-reconstruction-v2.2",randRange,select,selectionLaw,options,parents,budgetLaw,random,birth,run});
+  return Object.freeze({version:"native-reconstruction-v2.2",randRange,select,selectionLaw,cacheInfo,options,parents,budgetLaw,random,birth,run});
 })();
