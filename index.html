@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V5.1.0</title>
+<title>Breeding Tool — V5.1.1</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="ui-p3.css">
 </head>
@@ -11,7 +11,7 @@
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V5.1.0</span></h1>
+    <h1>Breeding Tool <span class="version">V5.1.1</span></h1>
     <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -106,14 +106,14 @@
           <h2>Advisor</h2>
           <p>Deterministic next-generation useful quality. Select a breeder to change only that side of Current Pair.</p>
         </div>
-        <span class="advisor-prototype-badge">Native predictions · V5.1.0</span>
+        <span class="advisor-prototype-badge">Native predictions · V5.1.1</span>
       </div>
       <div id="advisorSettings" hidden><div class="advisor-config-grid">
         <div class="advisor-config-main">
           <div class="advisor-stat-picker" id="advisorStatPicker">
-            <strong>Stat goals · MAX / IGNORE / MIN</strong>
+            <strong>Stat goals</strong>
             <div id="advisorStatToggles"></div>
-            <span class="small">Click to cycle ↑ MAX → • IGNORE → ↓ MIN. Only MAX contributes to useful quality. MIN/IGNORE retain their colours; all seven stats participate in reproduction.</span>
+            <span class="small">Click to toggle. Green: selected for quality / 100. Red: no quality contribution. All seven stats still participate in reproduction and budgets / 60.</span>
           </div>
           <div class="advisor-model-note" id="advisorModelNote"></div>
         </div>
@@ -188,7 +188,7 @@
  const goals=document.createElement('div');goals.className='sticky-goals';
  goals.append(document.getElementById('advisorStatPicker'));sticky.append(goals);
  const message=document.getElementById('advisorModelNote');goals.append(message);goals.append(document.getElementById('advisorMutationWarning'));
- document.getElementById('advisorStatPicker').querySelector('.small')?.remove();
+
  const left=document.querySelector('.global-toolbar-left');left.insertBefore(document.getElementById('worldSelect').closest('label'),left.querySelector('.character-context'));left.insertBefore(document.getElementById('worldState'),left.querySelector('.character-context'));left.append(document.getElementById('inactiveToggleBtn'));
  document.querySelector('.global-toolbar-right').prepend(document.getElementById('inactiveToggleBtn'));
  const command=document.createElement('details');command.className='extra-commands';command.innerHTML='<summary>More</summary><div></div>';
