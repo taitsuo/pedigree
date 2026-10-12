@@ -227,7 +227,7 @@ function makeCollapsible(element,key,{keep=null,label='block',onChange=null}={})
   const sync=()=>{
     const collapsed=collapsedBlocks.get(key)===true;
     element.classList.toggle('is-collapsed',collapsed);
-    button.textContent=collapsed?'▸':'▾';
+    const glyph=collapsed?'▸':'▾';if(button.textContent!==glyph)button.textContent=glyph;
     button.title=`${collapsed?'Expand':'Collapse'} ${label}`;
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-expanded',String(!collapsed));
@@ -260,7 +260,7 @@ function setupCommonPanel(element,id,keep,title){
     element.append(width);
   }
 }
-function restoreCommonPanels(){initializeStaticCollapsibles()}
+function restoreCommonPanels(){initializeStaticCollapsibles();const manual=document.getElementById('manuallyInactivePanel');if(manual)setupCommonPanel(manual,'manual-inactive','.manual-inactive-heading','Manually inactive')}
 
 function initializeAdvisorCollapsibles(){}
 
@@ -379,7 +379,7 @@ function speciesLabel(key){
 
 const STAT_LABELS=['V','F','P','R','T','A','I'];
 const DEFAULT_USEFUL_MASK=[true,true,true,true,true,true,false];
-const DEFAULT_BLOCK_ORDER=['context','current-pair','selected-pet','main-view'];
+const DEFAULT_BLOCK_ORDER=['context','current-pair','selected-pet','main-view','manual-inactive'];
 function normalizeBlockOrder(value){
   const requested=Array.isArray(value)?value.map(String):[];
   return [...requested.filter((id,index)=>DEFAULT_BLOCK_ORDER.includes(id)&&requested.indexOf(id)===index),...DEFAULT_BLOCK_ORDER.filter(id=>!requested.includes(id))];
@@ -1136,6 +1136,7 @@ fatherClustersBtn.addEventListener('click',()=>{
 
 
 function updateViewChrome(){
+  const manual=document.getElementById('manuallyInactivePanel');if(manual)manual.hidden=activeView.kind!=='breeding';
   detailShell.style.display='';
   visualControls.style.display=isSpecialBreedingView()?'none':'';
   siblingLegend.style.display=(activeView.kind==='foundation'||activeView.kind==='family')?'inline':'none';
@@ -1311,15 +1312,96 @@ function advisorProbabilityHtml(pair){
   return '<details class="pair-probabilities"><summary>Probabilities</summary>'+advisorChanceHtml('Chance to reach average quality',pair.prediction.reachAverage)+advisorChanceHtml('Chance to beat best parent',pair.prediction.beatParent)+'</details>';
 }
 
+// Keep panel bodies, details and scroll containers alive. Unchanged subtrees
+// (notably Bloodline Prediction on a goals change) are skipped entirely.
+function updateHtml(target,html){
+  if(target.dataset.renderedHtml===html)return;
+  const source=document.createElement('template');source.innerHTML=html;
+  function sync(parent,next){
+    const desired=[...next.childNodes];
+    for(let i=0;i<desired.length;i++){
+      const b=desired[i];let a=parent.childNodes[i];
+      if(!a){parent.append(b.cloneNode(true));continue}
+      if(a.nodeType!==b.nodeType||a.nodeName!==b.nodeName){a.replaceWith(b.cloneNode(true));continue}
+      if(a.nodeType===3){if(a.nodeValue!==b.nodeValue)a.nodeValue=b.nodeValue;continue}
+      if(a.nodeType!==1)continue;
+      // The open state is user state, not generated markup.
+      for(const attr of [...a.attributes])if(!b.hasAttribute(attr.name)&&attr.name!=='open'&&attr.name!=='data-state-key')a.removeAttribute(attr.name);
+      for(const attr of [...b.attributes])if(a.getAttribute(attr.name)!==attr.value)a.setAttribute(attr.name,attr.value);
+      if(a.innerHTML!==b.innerHTML)sync(a,b);
+    }
+    while(parent.childNodes.length>desired.length)parent.lastChild.remove();
+  }
+  sync(target,source.content);target.dataset.renderedHtml=html;
+}
+let realisticPreviewJob=null;
+function realisticPreview(pair){
+  const options={chanceMother:advisorCharacterBonus()+individualMutationBonus(pair.female),chanceFather:advisorCharacterBonus()+individualMutationBonus(pair.male),cap:advisorPredictionEngine.config.cap};
+  const key=AdvisorBest.key(pair.female.stats,pair.male.stats,options);
+  if(realisticPreviewJob?.key!==key){
+    const job=realisticPreviewJob={key,data:null,error:null};
+    AdvisorBest.distribution(pair.female.stats,pair.male.stats,options).then(data=>{job.data=data;if(realisticPreviewJob===job&&activeView.kind==='advisor'&&advisorState.preview==='best')renderAdvisor()}).catch(error=>{job.error=error.message;if(realisticPreviewJob===job&&activeView.kind==='advisor')renderAdvisor()});
+  }
+  return realisticPreviewJob;
+}
+function refreshStatGoals(){
+  // Selected Pet editors and relationships have no goal-dependent data.
+  const pet=byId.get(selected);
+  if(pet){
+    detail.querySelectorAll('.stats .stat').forEach((cell,i)=>cell.className='stat '+statClass(i,pet.stats[i],nodeSpeciesKey(pet)));
+    for(const item of detail.querySelectorAll('.detail-meta .item'))if(item.querySelector('.label')?.textContent===qualityLabel())item.querySelector('.value').textContent=pet.qualityScore?.toFixed(2)??'—';
+  }
+  if(activeView.kind==='advisor'){renderAdvisor();return}
+  renderAdvisorControls();renderBreedingPairPanel();
+  if(activeView.kind==='breeding'){
+    // Update cells and order without replacing inline editors or rows.
+    const rows=new Map([...breedingTable.querySelectorAll('tr[data-pet-id]')].map(row=>[row.dataset.petId,row]));
+    const list=boardNodes();
+    if(list.length!==rows.size||list.some(n=>!rows.has(String(n.id)))){renderBreedingTable();return}
+    const focused=breedingTable.contains(document.activeElement)?document.activeElement:null,selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
+    for(const n of list){
+      const row=rows.get(String(n.id));if(!row)continue;
+      row.querySelectorAll('.statcell').forEach((cell,i)=>cell.className='statcell '+statClass(i,n.stats[i],nodeSpeciesKey(n)));
+      row.children[12].textContent=n.qualityScore?.toFixed(2)??'—';
+      row.parentNode.append(row);
+    }
+    if(focused){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection)}
+  }else if(activeView.kind!=='experiment'){
+    // The SVG geometry and links do not depend on goals; repaint stat classes.
+    for(const node of tree.querySelectorAll('.node')){const n=byId.get(node.dataset.nodeId);if(n)node.querySelector('.score').textContent=scoreSummary(n)}
+  }
+}
+function manuallyInactivePets(){
+  const edits=loadBoardEdits();
+  return currentSpeciesNodes().filter(n=>confirmedAdult(n)&&!automaticInactiveReason(n)&&edits[boardKey(n)]?.breedingActive===false).sort((a,b)=>displayName(a).localeCompare(displayName(b))||String(a.bt_id).localeCompare(String(b.bt_id)));
+}
+function renderManuallyInactive(){
+  let panel=document.getElementById('manuallyInactivePanel');
+  if(!panel){
+    panel=document.createElement('section');panel.id='manuallyInactivePanel';panel.dataset.blockId='manual-inactive';panel.className='movable-block';
+    panel.innerHTML='<div class="manual-inactive-heading"><span class="block-drag-handle" draggable="true" title="Drag to reorder">⠿</span><strong></strong></div><div class="manual-inactive-body"></div>';
+    customizableBlocks.append(panel);setupCommonPanel(panel,'manual-inactive','.manual-inactive-heading','Manually inactive');initializeBlockOrdering();
+  }
+  setupCommonPanel(panel,'manual-inactive','.manual-inactive-heading','Manually inactive');
+  panel.hidden=activeView.kind!=='breeding';
+  const pets=manuallyInactivePets();panel.querySelector('strong').textContent='Manually inactive ('+pets.length+')';
+  updateHtml(panel.querySelector('.manual-inactive-body'),pets.length?pets.map(n=>'<div class="manual-inactive-row"><button type="button" class="linkbtn" data-manual-inspect="'+esc(n.bt_id)+'">'+esc(displayName(n))+' ('+esc(n.runtime_uid??'—')+') · '+(n.sex==='F'?'♀':n.sex==='M'?'♂':'?')+' · '+esc(n.bloodline||'Unknown')+'</button><button type="button" class="control" data-reactivate="'+esc(n.bt_id)+'">Reactivate</button></div>').join(''):'<p class="small">No manually inactive adults.</p>');
+  panel.querySelectorAll('[data-manual-inspect]').forEach(button=>button.onclick=()=>{const n=petByPersistentUid(button.dataset.manualInspect);if(n)selectPet(n.id)});
+  panel.querySelectorAll('[data-reactivate]').forEach(button=>button.onclick=()=>{
+    const n=petByPersistentUid(button.dataset.reactivate);if(!n||automaticInactiveReason(n))return;
+    const edits=loadBoardEdits(),key=boardKey(n);edits[key]={...edits[key],breedingActive:true};saveBoardEdits(edits);applyBoardEdits();updateCategoryNavigation();renderBreedingTable();if(selected===n.id)refreshSelectedDetail();renderBreedingPairPanel();
+  });
+}
+
 function advisorOffspringPreviewHtml(pair){
   const best=advisorState.preview==='best',r=pair.prediction;
-  const optimum=best?AdvisorBest.solve(pair.female.stats,pair.male.stats,advisorStatMask(),{chanceMother:advisorCharacterBonus()+individualMutationBonus(pair.female),chanceFather:advisorCharacterBonus()+individualMutationBonus(pair.male),cap:advisorPredictionEngine.config.cap}):null;
+  const realistic=best?realisticPreview(pair):null,optimum=realistic?.data?AdvisorBest.choose(realistic.data,advisorStatMask()):null;
   const goals=advisorStatMask(),colors={MAX:'#90b995',IGNORE:'#9da398',MIN:'#d28d80'};
-  const bars=r.safe.stats.map((stat,i)=>{
+  const bars=best&&!optimum?'':r.safe.stats.map((stat,i)=>{
     const value=best?optimum.genetics[i]:stat.mean,x=67+i*65,y=v=>340-v*30;
-    return `<g><title>${STAT_LABELS[i]}: ${best?'jointly reachable optimum':('mean; Q25–Q75 '+stat.low+'–'+stat.high+'; Q10–Q90 '+stat.low80+'–'+stat.high80)}</title><rect x="${x-17}" y="${y(value)}" width="34" height="${value*30}" fill="${colors[goals[i]]}"/>${best?'':`<path class="preview-whisker" d="M${x},${y(stat.high)}V${y(stat.low)}M${x-9},${y(stat.high)}h18M${x-9},${y(stat.low)}h18" stroke="#e8e6d8" stroke-width="2"/>`}<text class="advisor-chart-mean" x="${x+11}" y="${y(value)-8}">${value.toFixed(2)}</text><text x="${x}" y="363">${STAT_LABELS[i]}</text></g>`;
+    return `<g><title>${STAT_LABELS[i]}: ${best?'estimated exact genotype >1%' :('mean; Q25–Q75 '+stat.low+'–'+stat.high+'; Q10–Q90 '+stat.low80+'–'+stat.high80)}</title><rect x="${x-17}" y="${y(value)}" width="34" height="${value*30}" fill="${colors[goals[i]]}"/>${best?'':`<path class="preview-whisker" d="M${x},${y(stat.high)}V${y(stat.low)}M${x-9},${y(stat.high)}h18M${x-9},${y(stat.low)}h18" stroke="#e8e6d8" stroke-width="2"/>`}<text class="advisor-chart-mean" x="${x+11}" y="${y(value)-8}">${value.toFixed(2)}</text><text x="${x}" y="363">${STAT_LABELS[i]}</text></g>`;
   }).join('');
-  return `<div class="advisor-offspring-preview">${pair.key!==breedingPanel.female_bt_id+'::'+breedingPanel.male_bt_id?`<p class="preview-context">Recommended pair preview: <button type="button" data-inspect-uid="${esc(pair.female.bt_id)}">♀ ${esc(displayName(pair.female))} (${esc(pair.female.runtime_uid??'—')})</button> × <button type="button" data-inspect-uid="${esc(pair.male.bt_id)}">♂ ${esc(displayName(pair.male))} (${esc(pair.male.runtime_uid??'—')})</button></p>`:''}<div class="preview-modes"><button type="button" data-preview="average" aria-pressed="${!best}">Average</button><button type="button" data-preview="best" aria-pressed="${best}">Best Possible</button></div><svg class="advisor-prediction-chart" viewBox="0 0 540 380" role="img" aria-label="Genetic stats from 0 to 10">${Array.from({length:11},(_,v)=>`<g class="advisor-y-tick"><path d="M35 ${340-v*30}H525" stroke="#ffffff24"/><text x="18" y="${344-v*30}">${v}</text></g>`).join('')}${Array.from({length:8},(_,i)=>`<path d="M${35+i*70} 40V340" stroke="#ffffff18"/>`).join('')}${bars}</svg><p class="small preview-note">${best?'One jointly reachable optimum under the native reconstruction, not a probable birth. Budget '+optimum.obtained+'/'+optimum.requested+'; '+(optimum.remaining?'300-attempt exhaustion (potentially extremely rare).':'completed allocation.')+' Independent CRT calls assumed; actual runtime CRT state is unverified.':'Statistical means; whiskers Q25–Q75 (central 50% prediction interval). Hover for Q10–Q90. Means are not guaranteed scores.'}</p><details class="small"><summary>Prediction uncertainty</summary><p>${r.n.toLocaleString()} validation births. Intervals describe births, not confidence in the model. Native reconstruction retains its documented assumptions; these are not measured game probabilities.</p></details></div>`;
+  return `<div class="advisor-offspring-preview">${pair.key!==breedingPanel.female_bt_id+'::'+breedingPanel.male_bt_id?`<p class="preview-context">Recommended pair preview: <button type="button" data-inspect-uid="${esc(pair.female.bt_id)}">♀ ${esc(displayName(pair.female))} (${esc(pair.female.runtime_uid??'—')})</button> × <button type="button" data-inspect-uid="${esc(pair.male.bt_id)}">♂ ${esc(displayName(pair.male))} (${esc(pair.male.runtime_uid??'—')})</button></p>`:''}<div class="preview-modes"><button type="button" data-preview="average" aria-pressed="${!best}">Average</button><button type="button" data-preview="best" aria-pressed="${best}">Best Realistic (1%)</button></div><svg class="advisor-prediction-chart" viewBox="0 0 540 380" role="img" aria-label="Genetic stats from 0 to 10">${Array.from({length:11},(_,v)=>`<g class="advisor-y-tick"><path d="M35 ${340-v*30}H525" stroke="#ffffff24"/><text x="18" y="${344-v*30}">${v}</text></g>`).join('')}${Array.from({length:8},(_,i)=>`<path d="M${35+i*70} 40V340" stroke="#ffffff18"/>`).join('')}${bars}</svg><p class="small preview-note">${best?(optimum?'Best identified quality: '+optimum.quality.toFixed(2)+'/100 · Exact seven-stat genotype frequency: '+(100*optimum.p).toFixed(3)+'% · simultaneous approximate confidence interval '+(100*optimum.low).toFixed(3)+'–'+(100*optimum.high).toFixed(3)+'% · '+optimum.n.toLocaleString()+' independent validation births.':realistic.error?'Best Realistic unavailable: '+esc(realistic.error):realistic.data?'No Best Realistic identified above 1% with sufficient confidence.':'Estimating Best Realistic…')+' Frequencies estimate the native model under independent CRT draws; not exact game probabilities. Candidates whose interval crosses 1% are excluded. Best among validated discovered candidates; near-threshold optimality is not guaranteed.':'Statistical means; whiskers Q25–Q75 (central 50% prediction interval). Hover for Q10–Q90. Means are not guaranteed scores.'}</p><details class="small"><summary>Prediction uncertainty</summary><p>${r.n.toLocaleString()} validation births. Intervals describe births, not confidence in the model. Native reconstruction retains its documented assumptions; these are not measured game probabilities.</p></details></div>`;
 }
 
 function renderAdvisorControls(){
@@ -1327,14 +1409,14 @@ function renderAdvisorControls(){
   advisorRoleRow.replaceChildren();advisorObjectives.replaceChildren();
   advisorStatPicker.classList.add('visible');
   const goals=advisorStatMask();
-  advisorStatToggles.innerHTML=STAT_LABELS.map((label,i)=>`<button type="button" class="advisor-stat-toggle goal-${goals[i].toLowerCase()}" data-advisor-stat="${i}" aria-label="${label}: ${goals[i]}">${label} <span>${goals[i]}</span></button>`).join('');
+  updateHtml(advisorStatToggles,STAT_LABELS.map((label,i)=>`<button type="button" class="advisor-stat-toggle goal-${goals[i].toLowerCase()}" data-advisor-stat="${i}" aria-label="${label}: ${goals[i]}">${label} <span>${goals[i]}</span></button>`).join(''));
   advisorStatToggles.querySelectorAll('[data-advisor-stat]').forEach(button=>button.onclick=()=>{
     if(!currentSpecies)return;
     const next=advisorStatMask(),i=Number(button.dataset.advisorStat),cycle=['MAX','IGNORE','MIN'];
     next[i]=cycle[(cycle.indexOf(next[i])+1)%3];
     if(next.every(v=>v==='IGNORE')){advisorModelNote.textContent='At least one stat must remain MAX or MIN.';return}
     preferences.advisorGoals[currentSpecies]=next;recomputeQualityScores();savePreferences();
-    render();refreshSelectedDetail();renderBreedingPairPanel();
+    refreshStatGoals();
   });
   advisorModelNote.textContent='';
   renderAdvisorStatReference();
@@ -1360,28 +1442,35 @@ const ADVISOR_PANEL_IDS=['advisor-candidates','advisor-offspring','advisor-blood
 const advisorDetails=new Map();
 function advisorDetailScope(){return JSON.stringify([selectedDataset?.account_id,BTView.world,currentSpecies])}
 function rememberAdvisorDetails(){const key=advisorContent.dataset.detailScope;if(!key)return;const states=advisorDetails.get(key)||new Map();for(const d of advisorContent.querySelectorAll('details'))states.set(d.dataset.stateKey||d.querySelector('summary')?.textContent,d.open);if(advisorDetails.size>=16&&!advisorDetails.has(key))advisorDetails.delete(advisorDetails.keys().next().value);advisorDetails.set(key,states)}
-function restoreAdvisorDetails(){const key=advisorDetailScope(),states=advisorDetails.get(key);advisorContent.dataset.detailScope=key;for(const d of advisorContent.querySelectorAll('details')){d.dataset.stateKey=d.classList.contains('pair-probabilities')?'Probabilities:'+advisorState.chosenPairKey:d.querySelector('summary')?.textContent;const open=states?.get(d.dataset.stateKey);if(open!==undefined)d.open=open}}
-function organizeAdvisorPanels(){
-  const preview=advisorContent.querySelector('.advisor-offspring-preview');
-  const recommendation=advisorContent.querySelector('.advisor-result');if(recommendation&&preview&&advisorState.chosenPairKey!==breedingPanel.female_bt_id+'::'+breedingPanel.male_bt_id)preview.prepend(recommendation);
-  const candidates=advisorContent.querySelector('.advisor-alternatives')||document.createElement('div');candidates.classList.add('advisor-alternatives');
-  const blood=advisorContent.querySelector('.bloodline-result');
-  const status=advisorContent.querySelector('[role="status"]');if(status&&candidates)candidates.prepend(status);
-  advisorContent.replaceChildren();
+function restoreAdvisorDetails(){const key=advisorDetailScope(),states=advisorDetails.get(key),sameScope=advisorContent.dataset.detailScope===key;advisorContent.dataset.detailScope=key;for(const d of advisorContent.querySelectorAll('details')){d.dataset.stateKey=d.classList.contains('pair-probabilities')?'Probabilities:'+advisorState.chosenPairKey:d.querySelector('summary')?.textContent;const open=states?.get(d.dataset.stateKey);if(open!==undefined)d.open=open;else if(!sameScope)d.open=false}}
+function organizeAdvisorPanels(markup){
+  const source=document.createElement('div');source.innerHTML=markup;
+  const preview=source.querySelector('.advisor-offspring-preview');
+  const recommendation=source.querySelector('.advisor-result');if(recommendation&&preview&&advisorState.chosenPairKey!==breedingPanel.female_bt_id+'::'+breedingPanel.male_bt_id)preview.prepend(recommendation);
+  const candidates=source.querySelector('.advisor-alternatives')||document.createElement('div');candidates.classList.add('advisor-alternatives');
+  const blood=source.querySelector('.bloodline-result');
+  const status=source.querySelector('[role="status"]');if(status&&candidates)candidates.prepend(status);
+
   for(const [id,title,nodes] of [
     ['advisor-candidates','Top candidates',candidates?[candidates]:[]],
     ['advisor-offspring','Offspring Preview',preview?[preview]:[Object.assign(document.createElement('p'),{className:'small empty-preview',textContent:'Prediction unavailable. Select eligible parents with complete data.'})]],
     ['advisor-bloodlines','Bloodline Prediction',blood?[blood]:[Object.assign(document.createElement('p'),{className:'small empty-preview',textContent:'Bloodline prediction unavailable for this scope.'})]]
   ]){
-    const panel=document.createElement('section');panel.className='advisor-panel';panel.dataset.blockId=id;
+    let panel=advisorContent.querySelector(`[data-block-id="${id}"]`);
+    if(!panel){panel=document.createElement('section');panel.className='advisor-panel';panel.dataset.blockId=id;
     panel.innerHTML=`<div class="advisor-panel-heading"><span class="block-drag-handle" draggable="true" title="Drag to reorder" aria-label="Drag to reorder ${title}">⠿</span><strong>${title}</strong></div>`;
-    panel.append(...nodes);advisorContent.append(panel);
+    const body=document.createElement('div');body.className='advisor-panel-body';panel.append(body);advisorContent.append(panel);
+    }
+    const incoming=document.createElement('div');incoming.append(...nodes);updateHtml(panel.querySelector('.advisor-panel-body'),incoming.innerHTML);
     setupCommonPanel(panel,id,'.advisor-panel-heading',title);
   }
-  initializeBlockOrdering(advisorContent,{
-    apply:()=>{for(const id of [...preferences.advisorPanelOrder,...ADVISOR_PANEL_IDS]){const p=advisorContent.querySelector(`[data-block-id="${id}"]`);if(p&&!p.dataset.ordered){p.dataset.ordered='1';advisorContent.append(p)}}},
+  const order=[...new Set([...preferences.advisorPanelOrder,...ADVISOR_PANEL_IDS])];
+  const applyOrder=()=>{order.forEach((id,i)=>{const p=advisorContent.querySelector(`[data-block-id="${id}"]`);if(p&&advisorContent.children[i]!==p)advisorContent.insertBefore(p,advisorContent.children[i]||null)})};
+  if(!advisorContent.blockOrderingController)initializeBlockOrdering(advisorContent,{
+    apply:applyOrder,
     save:()=>{preferences.advisorPanelOrder=[...advisorContent.children].map(p=>p.dataset.blockId);savePreferences()}
   });
+  if(!advisorContent.querySelector('.block-dragging'))applyOrder();
   initializeAdvisorCollapsibles();
   restoreAdvisorDetails();
 }
@@ -1408,11 +1497,12 @@ function renderAdvisor(){
   renderAdvisorControls();
 
   const {breeders,femaleGroups,maleGroups,pairs,pending,warning,error}=advisorPairs();
+  renderBreedingPairPanel();
   const femaleCount=femaleGroups.reduce((sum,group)=>sum+group.pets.length,0),maleCount=maleGroups.reduce((sum,group)=>sum+group.pets.length,0);
   countText.textContent=`${femaleCount} eligible females · ${maleCount} eligible males · ${pairs.length} pairs`;
   if(!pairs.length){
-    advisorContent.innerHTML='<div class="advisor-empty" role="status">'+esc(error||(pending?'Calculating predictions… '+warning:warning||'No eligible pair.'))+'</div>';
-    organizeAdvisorPanels();
+    if(pending&&advisorContent.dataset.detailScope===advisorDetailScope()&&advisorContent.querySelector('.advisor-offspring-preview')){const status=advisorContent.querySelector('[role="status"]');if(status)status.textContent='Calculating predictions…';return}
+    organizeAdvisorPanels('<div class="advisor-empty" role="status">'+esc(error||(pending?'Calculating predictions… '+warning:warning||'No eligible pair.'))+'</div>');
     return;
   }
 
@@ -1420,7 +1510,6 @@ function renderAdvisor(){
   const current=pairs.find(p=>p.female.bt_id===breedingPanel.female_bt_id&&p.male.bt_id===breedingPanel.male_bt_id);
   let chosenBase=current||pairs[0];
   advisorState.manualPair=Boolean(current&&current.key!==pairs[0].key);
-  renderBreedingPairPanel();
   advisorState.chosenPairKey=chosenBase.key;
   const chosenRank=pairs.findIndex(pair=>pair.key===chosenBase.key)+1;
   let chosen=chosenBase;
@@ -1454,7 +1543,7 @@ function renderAdvisor(){
     }).join('');
     return `<div class="advisor-alt-row ${sex} ${members.length>1?'twins':''}"><span class="advisor-alt-rank">#${index+1}</span><div class="candidate-members">${buttons}</div></div>`;
   };
-  advisorContent.innerHTML=`
+  const markup=`
     <div role="status" class="small">${esc(pending?'Calculating predictions… · provisional order; independent confirmation pending.':warning||'Short Term · ranked by average quality')}</div>
     <div class="advisor-primary">
 
@@ -1480,7 +1569,7 @@ function renderAdvisor(){
         </div>
       </div>
     </div>`;
-  organizeAdvisorPanels();
+  organizeAdvisorPanels(markup);
   advisorContent.querySelectorAll('[data-advisor-candidate-side]').forEach(button=>{
    button.onkeydown=e=>{if(e.target===button&&(e.key==='Enter'||e.key===' ')){e.preventDefault();button.click()}};
    button.onclick=()=>{
@@ -1881,6 +1970,7 @@ function renderBreedingTable(){
   };
   breedingTable.querySelectorAll('input[data-field]').forEach(el=>el.addEventListener('input',()=>saveField(el)));
   breedingTable.querySelectorAll('select[data-field]').forEach(el=>el.addEventListener('change',()=>saveField(el)));
+  renderManuallyInactive();
   breedingTable.querySelectorAll('.open-node').forEach(b=>b.addEventListener('click',()=>{
     selectPet(b.dataset.id);
   }));
@@ -2011,17 +2101,19 @@ function setPairStatus(message){breedingPairState.textContent=message;breedingPa
 function renderBreedingPairPanel(){
   const femaleUid=breedingPanel.female_bt_id,maleUid=breedingPanel.male_bt_id;
   const quality=document.getElementById('pair-quality');
-  const context=pairDisplayContext(),same=quality.dataset.context===context,open=same&&quality.querySelector('.pair-probabilities')?.open;
+  const context=JSON.stringify([selectedDataset?.account_id,BTView.world,...[femaleUid,maleUid].map(uid=>{const n=petByPersistentUid(uid);return [uid,n?.stats,n?.lifecycleState,n?.stage,n?.sex,n?.historical,n&&nodeSpeciesKey(n),n&&individualMutationBonus(n)]}),advisorCharacterBonus()]),same=quality.dataset.context===context;
+  if(!same)quality.replaceChildren();
   const f=petByPersistentUid(femaleUid),m=petByPersistentUid(maleUid);
   const pair=f&&m?currentPairResult(f,m):null;
   const p=breedingPanel.prediction;
-  quality.innerHTML=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pair.score.toFixed(2)+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,preferences)?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+p.expected_quality.toFixed(2)+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(currentPairJob?.error||'Calculating predictions…'):'Select both parents')+'</div>';
-  quality.dataset.context=context;if(open&&quality.querySelector('.pair-probabilities'))quality.querySelector('.pair-probabilities').open=true;
+  const qualityHtml=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pair.score.toFixed(2)+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,preferences)?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+p.expected_quality.toFixed(2)+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(currentPairJob?.error||'Calculating predictions…'):'Select both parents')+'</div>';
+  if(!pair&&same&&quality.querySelector('.pair-probabilities')){quality.querySelector('.advisor-score').textContent='…';quality.querySelector('.small').textContent='Average Quality · recalculating';quality.querySelector('summary').textContent='Probabilities · previous simulation';delete quality.dataset.renderedHtml;}else updateHtml(quality,qualityHtml);
+  quality.dataset.context=context;
   nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
   nextMaleName.textContent=maleUid===null?'Not selected':selectedPetName(maleUid);
   for(const [side,uid] of [['female',femaleUid],['male',maleUid]]){
     const pet=petByPersistentUid(uid),body=document.getElementById('pair-'+side+'-body');
-    if(body)body.innerHTML=pet?advisorParentHtml(pet,side):'<div class="pair-empty">'+(uid?'Selected pet unavailable':'No '+side+' selected')+'</div>';
+    if(body)updateHtml(body,pet?advisorParentHtml(pet,side):'<div class="pair-empty">'+(uid?'Selected pet unavailable':'No '+side+' selected')+'</div>');
     body?.querySelectorAll('[data-select-pet]').forEach(card=>{
       card.onclick=()=>selectPet(card.dataset.selectPet);
       card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectPet(card.dataset.selectPet)}};

@@ -21,3 +21,5 @@
 
 /* Link samples share the actual SVG edge styling, including sibling dashes. */
 .legend-link{width:30px;height:8px;vertical-align:middle;margin-right:6px;overflow:visible}
+
+.manual-inactive-body{padding:12px 18px}.manual-inactive-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #ffffff18}.manual-inactive-row .linkbtn{white-space:normal;text-align:left}.common-panel[hidden]{display:none}
