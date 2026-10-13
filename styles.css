@@ -677,3 +677,5 @@ svg{display:block;min-width:100%;}
 .advisor-bloodline-prediction{padding:18px;border:1px solid #ffffff26;border-radius:8px}
 .advisor-mutation-warning{padding:9px;border-left:3px solid #d6a14d;color:#efd7ad}
 @media(max-width:850px){.advisor-prediction-layout{grid-template-columns:1fr}.advisor-prediction-chart{min-height:270px}}
+
+.pair-common-stats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center;margin:10px 0}.pair-common-stats>div{display:flex;flex-direction:column;gap:4px}.pair-common-stats span{color:var(--muted,#aaa58f)}.pair-common-stats strong{font-size:1.15rem}
