@@ -1,5 +1,5 @@
 'use strict';
-// Reconstruction §5, Icarus_Genetics_Experimenter_CURRENT v2.2 (2026-10-10).
+// Reconstruction §5, native genetics reference v2.2 (2026-10-10).
 // Exact selector transformation conditional on uniform k; independent calls are
 // a simulation assumption, not a reconstruction of the game's future CRT state.
 const NativeGenetics=(()=>{

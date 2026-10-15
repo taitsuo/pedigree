@@ -72,7 +72,6 @@ const AdvisorRanking=(()=>{
    const result={rows,catalogs,metrics:{strategy,pairs:pairs.length,models:models.size,evaluated,pruned,refinements,milliseconds:performance.now()-started}};
    onProgress({...result,final:true});return result;
   }
-  // Auto can be added as a policy here without changing scoring/preview.
   return Object.freeze({run,cancel});
  }
  return Object.freeze({create,stable,tolerance,strategies:Object.freeze(['all-pairs','progressive'])});

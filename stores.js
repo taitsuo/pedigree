@@ -19,7 +19,7 @@ globalThis.BTStores=(()=>{
   const uid=x=>typeof x==='string'&&/^\d+$/.test(x);
   // Provenance comparison only: no reproduction or quality calculation here.
   const vector=(x,integerOnly=false)=>Array.isArray(x)&&x.length===7&&x.every(v=>Number.isFinite(v)&&v>=0&&v<=10&&(!integerOnly||Number.isInteger(v)));
-  const goalVector=x=>Array.isArray(x)&&x.length===7&&x.every(v=>['MAX','IGNORE','MIN'].includes(v));
+  const goalVector=x=>Array.isArray(x)&&x.length===7&&x.every(v=>['MAX','IGNORE'].includes(v));
   function predictionShape(p){
     const v=p?.provenance;
     return object(p)&&p.schema===2&&typeof p.model==='string'&&typeof p.quality_policy==='string'&&Number.isFinite(p.expected_quality)&&p.expected_quality>=0&&p.expected_quality<=70&&vector(p.expected_genetics)&&object(v)
@@ -27,17 +27,17 @@ globalThis.BTStores=(()=>{
       &&vector(v.female_genetics,true)&&vector(v.male_genetics,true)&&goalVector(v.stat_goals)
       &&['character_bonus_pct','female_bonus_pct','male_bonus_pct'].every(k=>Number.isFinite(v[k])&&v[k]>=0)
       &&p.units==='useful-genetic-points'&&v.method==='B2+C'&&v.max_attempts===300&&v.max_stat===10&&v.tolerance===.0001&&v.cap===60
-      &&p.maximum_quality===10*v.stat_goals.filter(g=>g==='MAX').length&&p.maximum_quality>0&&p.expected_quality<=p.maximum_quality
+      &&p.maximum_quality===10*v.stat_goals.filter(g=>g==='MAX').length&&p.expected_quality<=p.maximum_quality
       &&Number.isFinite(p.expected_budget)&&Math.abs(p.expected_budget-p.expected_genetics.reduce((s,v)=>s+v,0))<1e-8&&p.expected_budget<=60;
   }
-  function predictionValid(d,key,pair,overridePreferences){
-    const p=pair?.prediction,v=p?.provenance,w=d.worlds?.[key],c=d.extensions?.active_character;
-    if(!predictionShape(p)||p.schema!==2||p.model!=='iid-b2c-v1'||p.quality_policy!=='useful-max-points-v1'||!w||d.active_world!==key||!c||!c.name||c.name==='None')return null;
-    if(v.account_id!==d.account.steam_id||v.world!==key||v.character_name!==c.name||v.character_bonus_pct!==c.mutation_bonus_pct)return null;
+  function predictionValid(d,key,pair,overridePreferences,character=d.extensions?.active_character){
+    const p=pair?.prediction,v=p?.provenance,w=d.worlds?.[key],c=character;
+    if(!predictionShape(p)||p.schema!==2||p.model!=='iid-b2c-v1'||p.quality_policy!=='useful-max-points-v1'||!w||!c||!c.name||c.name==='None')return null;
+    if(v.account_id!==d.account.steam_id||v.world!==key||v.character_name!==c.name||v.character_slot!==c.slot||v.character_bonus_pct!==c.mutation_bonus_pct)return null;
     const pref=overridePreferences||{...d.user_data.preferences,...d.user_data.worlds[key]?.graph?.preferences};
     let goals=pref.advisorGoals?.[v.goals_key];
-    if(!goals){const m=pref.usefulStats?.[v.goals_key]||[true,true,true,true,true,true,false];goals=m.map(x=>x?'MAX':'IGNORE')}
-    if(!equal(goals.map(g=>g==='MAX'),v.stat_goals.map(g=>g==='MAX')))return null;
+    goals=goals||['MAX','MAX','MAX','MAX','MAX','MAX','IGNORE'];
+    if(!goalVector(goals)||!equal(goals,v.stat_goals))return null;
     const expected=p.expected_genetics.reduce((s,x,i)=>s+(v.stat_goals[i]==='MAX'?x:0),0);if(Math.abs(expected-p.expected_quality)>1e-8)return null;
     let species;
     for(const side of ['female','male']){
@@ -65,6 +65,17 @@ globalThis.BTStores=(()=>{
       insist(character.slot===null||Number.isInteger(character.slot)&&character.slot>=0,'Invalid active character slot');
       insist(character.mutation_bonus_pct===null||typeof character.mutation_bonus_pct==='number'&&Number.isFinite(character.mutation_bonus_pct),'Invalid active character mutation bonus');
     }
+    const characters=d.extensions.characters;
+    if(characters!==undefined){
+      insist(Array.isArray(characters),'Invalid Character registry');
+      const seen=new Set();
+      for(const c of characters){
+        insist(object(c)&&typeof c.name==='string'&&c.name.trim()&&c.name.trim()!=='None'&&Number.isInteger(c.slot)&&c.slot>=0,'Invalid Character identity');
+        const id=JSON.stringify([c.slot,c.name]);insist(!seen.has(id),'Duplicate Character identity');seen.add(id);
+        for(const k of ['mutation_bonus_pct','lineage_mutation_chance_pct'])insist(c[k]===null||typeof c[k]==='number'&&Number.isFinite(c[k]),'Invalid Character bonus');
+      }
+    }
+
     const prospects=new Set();
     for(const [id,w]of Object.entries(d.worlds)){
       insist(Number.isSafeInteger(worldNumber(id))&&worldNumber(id)<d.next_world_id,'Invalid W-ID/world high-water');

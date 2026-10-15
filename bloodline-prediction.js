@@ -15,28 +15,6 @@ function chanceCount(chance) {
   for (let k = 0; k < 32768; k++) n += nativeRange(k, 1, 100) <= chance;
   return n;
 }
-function choose(rows, k, skipFirst = false) {
-  let seed = nativeRange(k, 0, 2147483646) >>> 0;
-  let sum = 0, candidate = null;
-  for (let i = skipFirst ? 1 : 0; i < rows.length; i++) {
-    const w = rows[i].Weighting;
-    const n = Math.trunc(F(sum + w)) + 1;
-    let r = 0;
-    if (n > 0) {
-      seed = (Math.imul(seed, 0x0bb38435) + 0x3619636b) >>> 0;
-      r = Math.trunc(F(F((seed >>> 9) / 8388608) * F(n)));
-    }
-    if (r >= sum) candidate = i;
-    sum = Math.trunc(F(sum + w));
-  }
-  return candidate;
-}
-function catalogCounts(rows, skip) {
-  const counts = rows.map(() => 0);
-  for (let k = 0; k < 32768; k++) counts[choose(rows, k, skip)]++;
-
-  return counts;
-}
 function nearestEven(x) {
   const n = Math.floor(x), d = x - n;
   return d < .5 ? n : d > .5 ? n + 1 : n % 2 === 0 ? n : n + 1;
@@ -49,14 +27,6 @@ function branchProbabilities(maternalStat, paternalStat) {
     inheritanceCount, maternalDirect:h/2, paternalDirect:h/2, randomBranch:1-h,
     skipFirstGivenRandom:chanceCount(bonus)/32768};
 }
-function outcome(rows, maternalName, paternalName, stats) {
-  const b = branchProbabilities(...stats), h = 1-b.randomBranch;
-  const full = catalogCounts(rows, false), skip = catalogCounts(rows, true);
-  return rows.map((r,i) => ({name:r.Name,
-    p: h/2 * (Number(r.Name===maternalName)+Number(r.Name===paternalName)) +
-      b.randomBranch*((1-b.skipFirstGivenRandom)*full[i]+b.skipFirstGivenRandom*skip[i])/32768}));
-}
-
 const catalog=[{"name":"Wild","weight":300,"fullCount":13153,"skipFirstCount":0},{"name":"Brave","weight":50,"fullCount":2252,"skipFirstCount":3626},{"name":"Careful","weight":50,"fullCount":2209,"skipFirstCount":3679},{"name":"Timid","weight":50,"fullCount":2253,"skipFirstCount":3712},{"name":"Bold","weight":50,"fullCount":2273,"skipFirstCount":3794},{"name":"Hardy","weight":50,"fullCount":2200,"skipFirstCount":3797},{"name":"Stout","weight":50,"fullCount":2232,"skipFirstCount":3720},{"name":"Ambitious","weight":50,"fullCount":2251,"skipFirstCount":3777},{"name":"Resolute","weight":25,"fullCount":1127,"skipFirstCount":1953},{"name":"Fierce","weight":25,"fullCount":1158,"skipFirstCount":1930},{"name":"Savage","weight":25,"fullCount":1171,"skipFirstCount":1954},{"name":"Alpha","weight":10,"fullCount":489,"skipFirstCount":826}];
 const branchCache=new Map();
 function branches(a,b){if(![a,b].every(q=>typeof q==='number'&&Number.isFinite(q)&&q>=0&&q<=100))throw Error('Lineage stats unavailable');const key=a+','+b;if(!branchCache.has(key)){if(branchCache.size>=32)branchCache.delete(branchCache.keys().next().value);branchCache.set(key,Object.freeze(branchProbabilities(a,b)))}return branchCache.get(key)}

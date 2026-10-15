@@ -172,8 +172,6 @@ const customizableBlocks=document.getElementById('customizableBlocks');
 const pedigreeBtn = document.getElementById('pedigreeBtn');
 const breedingBtn = document.getElementById('breedingBtn');
 const advisorBtn = document.getElementById('advisorBtn');
-const experimentBtn=document.getElementById('experimentBtn');
-const experimentWrap=document.getElementById('experimentWrap');
 const advisorWrap = document.getElementById('advisorWrap');
 const advisorStatPicker = document.getElementById('advisorStatPicker');
 const advisorStatToggles = document.getElementById('advisorStatToggles');
@@ -202,7 +200,6 @@ const searchClearBtn=document.getElementById('searchClearBtn');
 const selectedPetSummary=document.getElementById('selectedPetSummary');
 const visualControls=document.querySelector('.visual-controls');
 const siblingLegend=document.getElementById('siblingLegend');
-const stickyTools=document.querySelector('.sticky-tools');
 const motherClustersBtn=document.getElementById('motherClustersBtn');
 const fatherClustersBtn=document.getElementById('fatherClustersBtn');
 let currentSpecies='',activeView={kind:'species',key:null},selected=null,lastLayout=null,zoomScale=1,hideInactive=true,clusterParent='mother';
@@ -260,7 +257,6 @@ function setupCommonPanel(element,id,keep,title){
 }
 function restoreCommonPanels(){initializeStaticCollapsibles();const manual=document.getElementById('manuallyInactivePanel');if(manual)setupCommonPanel(manual,'manual-inactive','.manual-inactive-heading','Manually inactive')}
 
-function initializeAdvisorCollapsibles(){}
 
 function restoredAdvisorState(value={}){return {preview:value.preview==='best'?'best':'average',referenceStat:Number.isInteger(value.referenceStat)&&value.referenceStat>=0&&value.referenceStat<7?value.referenceStat:0,chosenPairKey:typeof value.chosenPairKey==='string'?value.chosenPairKey:null}}
 const advisorState={preview:'average',chosenPairKey:null,referenceStat:0};
@@ -310,7 +306,6 @@ function automaticInactiveReason(n){
   if(!confirmedAdult(n))return 'Adult stage not confirmed: not yet a breeder';
   return '';
 }
-function sexRank(n){return n.sex==='F'?0:n.sex==='M'?2:1}
 function statsText(n){return n.stats ? n.stats.map(value=>value??'—').join(' / ') : '—'}
 function offspringOf(id){return (childrenByParentId.get(id)||[]).map(childId=>byId.get(childId)).filter(hasPetName)}
 function siblingsOf(n){return (siblingsById.get(n.id)||[]).map(id=>byId.get(id)).filter(hasPetName)}
@@ -378,7 +373,7 @@ function speciesLabel(key){
 
 const STAT_LABELS=['V','F','P','R','T','A','I'];
 const STAT_NAMES=['Vigor','Fitness','Physique','Reflex','Toughness','Adaptation','Instinct'];
-const DEFAULT_USEFUL_MASK=[true,true,true,true,true,true,false];
+const DEFAULT_STAT_GOALS=['MAX','MAX','MAX','MAX','MAX','MAX','IGNORE'];
 const DEFAULT_BLOCK_ORDER=['context','current-pair','selected-pet','main-view','manual-inactive'];
 function normalizeBlockOrder(value){
   const requested=Array.isArray(value)?value.map(String):[];
@@ -401,8 +396,8 @@ function normalizePreferences(value){
 
     customRoles:Array.isArray(value.customRoles)?value.customRoles:[],
     advisorStrategy:value.advisorStrategy==='progressive'?'progressive':'all-pairs',
-    advisorGoals:Object.fromEntries(Object.entries({...Object.fromEntries(Object.entries(value.usefulStats||{}).filter(([,m])=>Array.isArray(m)&&m.length===7&&m.every(v=>typeof v==='boolean')&&m.some(Boolean)).map(([k,m])=>[k,m.map(v=>v?'MAX':'IGNORE')])),...value.advisorGoals}).filter(([,g])=>Array.isArray(g)&&g.length===7&&g.every(v=>['MAX','IGNORE','MIN'].includes(v)))),
-    advisorPanelOrder:Array.isArray(value.advisorPanelOrder)?[...new Set(value.advisorPanelOrder.filter(id=>['advisor-main','advisor-offspring','advisor-candidates','advisor-bloodlines'].includes(id)))]:[],
+    advisorGoals:Object.fromEntries(Object.entries(value.advisorGoals||{}).filter(([,g])=>Array.isArray(g)&&g.length===7&&g.every(v=>['MAX','IGNORE'].includes(v)))),
+    advisorPanelOrder:Array.isArray(value.advisorPanelOrder)?[...new Set(value.advisorPanelOrder.filter(id=>['advisor-offspring','advisor-candidates','advisor-bloodlines'].includes(id)))]:[],
     advisorCollapsed:value.advisorCollapsed&&typeof value.advisorCollapsed==='object'?{...value.advisorCollapsed}:{},
     panelCollapsed:{...(value.panelCollapsed||{})},
     panelWidths:{...(value.panelWidths||{})},
@@ -481,7 +476,7 @@ function speciesKeys(){
   return allSpeciesKeys().filter(key=>!hidden.has(key));
 }
 
-function statGoals(speciesKey=currentSpecies){return preferences.advisorGoals[speciesKey]||(preferences.advisorGoals[speciesKey]=GeneticQuality.goals(DEFAULT_USEFUL_MASK))}
+function statGoals(speciesKey=currentSpecies){return preferences.advisorGoals[speciesKey]||(preferences.advisorGoals[speciesKey]=[...DEFAULT_STAT_GOALS])}
 function qualityLabel(){return 'Useful genetic quality'}
 function qualityText(raw,speciesKey=currentSpecies){const p=GeneticQuality.prepare(statGoals(speciesKey));if(!p.maxRaw)return 'No selected stats';const percent=100*raw/p.maxRaw;return percent.toFixed(Number.isInteger(percent)?0:2)+' / 100'}
 function scoreSummary(n){return n.total7==null?'Incomplete stats':`Total: ${n.total7} / Quality: ${qualityText(n.qualityScore,nodeSpeciesKey(n))}`}
@@ -530,10 +525,6 @@ function viewNodes(view=activeView,speciesKey=currentSpecies,{includeInactive=fa
     ids=familyIdsForPet(byId.get(view.key));
   }
   return full.filter(n=>hasPetName(n)&&ids.has(n.id)&&(includeInactive||(confirmedAdult(n)&&(!hideInactive||n.breedingActive))));
-}
-
-function getVisibleNodes(){
-  return viewNodes(activeView,currentSpecies);
 }
 
 function nodeMatchesSearch(n,query=search.value.trim().toLowerCase()){
@@ -829,7 +820,7 @@ function categoryAutoHidden(descriptor){
   return false;
 }
 
-function isSpecialBreedingView(){return activeView.kind==='breeding'||activeView.kind==='advisor'||activeView.kind==='experiment'}
+function isSpecialBreedingView(){return activeView.kind==='breeding'||activeView.kind==='advisor'}
 function specialViewScope(){
   if(isSpecialBreedingView()&&activeView.scopeKind==='bloodline'&&activeView.scopeKey!=null){
     return {kind:'bloodline',key:String(activeView.scopeKey)};
@@ -1026,7 +1017,6 @@ function updateCategoryNavigation(){
   pedigreeBtn.classList.toggle('active',!isSpecialBreedingView());
   breedingBtn.classList.toggle('active',activeView.kind==='breeding');
   advisorBtn.classList.toggle('active',activeView.kind==='advisor');
-  experimentBtn?.classList.toggle('active',activeView.kind==='experiment');
   speciesBadge.textContent=currentSpecies?`Species: ${speciesLabel(currentSpecies)}`:'Species: none selected';
   const pop=currentSpeciesNodes();
   const females=pop.filter(n=>n.sex==='F').length,males=pop.filter(n=>n.sex==='M').length;
@@ -1113,7 +1103,6 @@ function switchToolView(kind){
 pedigreeBtn.addEventListener('click',()=>switchToolView('pedigree'));
 breedingBtn.addEventListener('click',()=>switchToolView('breeding'));
 advisorBtn.addEventListener('click',()=>switchToolView('advisor'));
-experimentBtn?.addEventListener('click',()=>switchToolView('experiment'));
 
 inactiveToggleBtn.addEventListener('click',()=>{
   hideInactive=!hideInactive;
@@ -1203,7 +1192,7 @@ let currentPairJob=null;
 function preparedPair(pair){return {...pair,female:{...pair.female,bonus:individualMutationBonus(pair.female)},male:{...pair.male,bonus:individualMutationBonus(pair.male)}}}
 function currentPairKey(f,m){return JSON.stringify([selectedDataset?.account_id,BTView.world,PairScoring.version,f.bt_id,m.bt_id,f.stats,m.stats,individualMutationBonus(f),individualMutationBonus(m),advisorCharacterBonus(),statGoals(nodeSpeciesKey(f)),PairScoring.config])}
 function currentPairResult(f,m){
- const canPredict=[f,m].every(n=>n.lifecycleState==='ACTIVE'&&!n.historical&&n.stage==='adult'&&n.stats.length===7&&n.stats.every(v=>Number.isInteger(v)&&v>=0&&v<=10)&&individualMutationBonus(n)!==null)&&f.sex==='F'&&m.sex==='M'&&nodeSpeciesKey(f)===nodeSpeciesKey(m)&&advisorCharacterBonus()!==null;
+ const canPredict=[f,m].every(n=>n.lifecycleState==='ACTIVE'&&!n.historical&&n.stage==='adult'&&n.stats.length===7&&n.stats.every(v=>Number.isInteger(v)&&v>=0&&v<=10)&&individualMutationBonus(n)!==null)&&f.sex==='F'&&m.sex==='M'&&nodeSpeciesKey(f)===nodeSpeciesKey(m)&&advisorCharacterBonus()!==null&&GeneticQuality.prepare(statGoals(nodeSpeciesKey(f))).maxRaw>0;
  if(!canPredict)return null;
  const key=currentPairKey(f,m);if(currentPairResults.has(key))return currentPairResults.get(key);
  const pair={key:f.bt_id+'::'+m.bt_id,female:f,male:m};
@@ -1211,10 +1200,30 @@ function currentPairResult(f,m){
   if(currentPairResults.size>=128)currentPairResults.delete(currentPairResults.keys().next().value);currentPairResults.set(key,result);currentPairJob=null;return result;
  }catch(error){currentPairJob={key,error:error.message};return null}
 }
-function advisorCharacterBonus(){
- const d=BTView.document,c=d?.extensions?.active_character;
- return c&&BTView.world===d.active_world&&selectedDataset?.account_id===d.account.steam_id&&typeof c.name==='string'&&c.name.trim()&&c.name!=='None'&&Number.isFinite(c.mutation_bonus_pct)?c.mutation_bonus_pct:null;
+const CONTEXT_KEY='breeding-advisor-context-v1';
+const contextChoices=(()=>{try{const x=JSON.parse(localStorage.getItem(CONTEXT_KEY));return x&&typeof x.accounts==='object'&&x.accounts?x:{accounts:{}}}catch{return {accounts:{}}}})();
+function sameCharacter(a,b){return !!a&&!!b&&Number.isInteger(a.slot)&&a.slot>=0&&typeof a.name==='string'&&!!a.name.trim()&&a.name.trim()!=='None'&&a.slot===b.slot&&a.name===b.name}
+function knownCharacters(){return BTView.document?.extensions?.characters||[]}
+function selectedCharacter(){return knownCharacters().find(c=>sameCharacter(c,BTView.character))||null}
+function rememberContext(){
+ const account=BTView.document?.account?.steam_id;if(!account)return;
+ const c=selectedCharacter();contextChoices.account=account;
+ contextChoices.accounts[account]={world:BTView.world,character:c?{slot:c.slot,name:c.name}:null};
+ try{localStorage.setItem(CONTEXT_KEY,JSON.stringify(contextChoices))}catch(e){console.warn('Could not remember selected context:',e)}
 }
+function advisorCharacterBonus(){const c=selectedCharacter();return c&&Number.isFinite(c.mutation_bonus_pct)?c.mutation_bonus_pct:null}
+function sendContextReason(){
+ const d=BTView.document;
+ if(!d||!selectedDataset||selectedDataset.account_id!==d.account.steam_id)return 'Select the connected Account to send.';
+ if(BTView.world!==d.active_world||d.worlds[BTView.world]?.storage_state==='archive')return 'Send unavailable: selected World differs from the last recorded active World.';
+ if(!sameCharacter(selectedCharacter(),d.extensions?.active_character))return 'Send unavailable: selected Character differs from the last recorded active Character (slot + name).';
+ return '';
+}
+function restoredView(view){
+ if(['species','bloodline','foundation','family','breeding','advisor'].includes(view?.kind))return BTData.copy(view);
+ return view?.scopeKind==='bloodline'&&view.scopeKey!=null?{kind:'bloodline',key:String(view.scopeKey)}:{kind:'species',key:null};
+}
+
 function advisorPairs(){
  const all=advisorEligibleBreeders(),breeders=all.filter(n=>individualMutationBonus(n)!==null),femaleGroups=advisorCandidateGroups(breeders,'F'),maleGroups=advisorCandidateGroups(breeders,'M'),rawPairs=[];
  for(const femaleGroup of femaleGroups)for(const maleGroup of maleGroups)for(const female of femaleGroup.pets)for(const male of maleGroup.pets){if(nodeSpeciesKey(female)===nodeSpeciesKey(male))rawPairs.push({female,male,femaleGroup,maleGroup,key:stablePetId(female.bt_id)+'::'+stablePetId(male.bt_id)})}
@@ -1222,7 +1231,7 @@ function advisorPairs(){
  const base={breeders:all,femaleGroups,maleGroups,pairs:[],rawPairs,warning,catalogs:{female:[],male:[]}};
  const key=JSON.stringify([selectedDataset?.account_id,BTView.world,currentSpecies,PairScoring.version,GeneticQuality.id,advisorStatMask(),character,preferences.advisorStrategy,rawPairs.map(p=>[p.key,p.femaleGroup.key,p.maleGroup.key,p.female.stats,p.male.stats,individualMutationBonus(p.female),individualMutationBonus(p.male)])]);
  if(advisorPredictionJob?.key!==key){advisorPredictionEngine.cancel();advisorPredictionJob=null}
- if(character===null)return {...base,warning:'Character mutation bonus unknown or outside the active world. Use Refresh in game.'};
+ if(character===null)return {...base,warning:'Selected Character mutation bonus unknown. Refresh in game with this Character to record it.'};
  if(!GeneticQuality.prepare(advisorStatMask()).maxRaw)return {...base,warning:'No selected stats: select at least one stat to rank breeders.'};
  if(!rawPairs.length)return {...base,warning:warning||'No eligible pair.'};
  if(!advisorPredictionCache.has(key)&&!advisorPredictionJob){
@@ -1354,7 +1363,7 @@ function refreshStatGoals(){
       row.parentNode.append(row);
     }
     if(focused){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection)}
-  }else if(activeView.kind!=='experiment'){
+  }else{
     // The SVG geometry and links do not depend on goals; repaint stat classes.
     for(const node of tree.querySelectorAll('.node')){const n=byId.get(node.dataset.nodeId);if(n)node.querySelector('.score').textContent=scoreSummary(n)}
   }
@@ -1389,7 +1398,7 @@ function advisorOffspringPreviewHtml(pair){
   const obtainedBudget=optimum?.genetics.reduce((sum,v)=>sum+v,0);
   if(optimum&&obtainedBudget!==optimum.budget)throw Error('Best Realistic budget mismatch');
   const budgetHtml=best?(optimum?`Best Realistic Budget: ${obtainedBudget} / 60 · Budget chance: ${(100*optimum.budgetProbability).toFixed(2)} %`:realistic?.data?'Best Realistic Budget: unavailable':'Best Realistic Budget: calculating…'):`Average Budget: ${means.reduce((sum,s)=>sum+s.mean,0).toFixed(1)} / 60`;
-  const goals=advisorStatMask(),colors={MAX:'#90b995',IGNORE:'#eca89c',MIN:'#eca89c'};
+  const goals=advisorStatMask(),colors={MAX:'#90b995',IGNORE:'#eca89c'};
   const bars=best&&!optimum?'':means.map((stat,i)=>{
     const value=best?optimum.genetics[i]:stat.mean,x=67+i*65,y=v=>340-v*30;
     return `<g><title>${STAT_LABELS[i]}: ${best?'sampled genotype at the conditional quality threshold' :(sample?'deterministic mean; sampled Q25–Q75 '+stat.low+'–'+stat.high+'; sampled Q10–Q90 '+stat.low80+'–'+stat.high80:'deterministic B2+C mean; intervals pending')}</title><rect x="${x-17}" y="${y(value)}" width="34" height="${value*30}" fill="${colors[goals[i]]}"/>${best||!sample?'':`<path class="preview-whisker" d="M${x},${y(stat.high)}V${y(stat.low)}M${x-9},${y(stat.high)}h18M${x-9},${y(stat.low)}h18" stroke="#e8e6d8" stroke-width="2"/>`}<text class="advisor-chart-mean" x="${x+11}" y="${y(value)-8}">${best?value.toFixed(2):common.expected_genetics[i]}</text><text x="${x}" y="363">${STAT_LABELS[i]}</text></g>`;
@@ -1417,8 +1426,7 @@ function renderAdvisorControls(){
   warning.textContent='Character genetics bonus: 0%';
 }
 function lineageCharacterBonus(){
-  if(advisorCharacterBonus()===null)return null;
-  const q=BTView.document?.extensions?.active_character?.lineage_mutation_chance_pct;
+  const q=selectedCharacter()?.lineage_mutation_chance_pct;
   return typeof q==='number'&&Number.isFinite(q)&&q>=0&&q<=100?q:null;
 }
 function bloodlinePredictionHtml(pair){
@@ -1462,7 +1470,6 @@ function organizeAdvisorPanels(markup){
     save:()=>{preferences.advisorPanelOrder=[...advisorContent.children].map(p=>p.dataset.blockId);savePreferences()}
   });
   if(!advisorContent.querySelector('.block-dragging'))applyOrder();
-  initializeAdvisorCollapsibles();
   restoreAdvisorDetails();
 }
 function predictionDisplay(p){
@@ -1479,7 +1486,7 @@ function advisorPairPrediction(pair){
       female_bt_id:pair.female.bt_id,male_bt_id:pair.male.bt_id,
       female_genetics:[...f.genetics],male_genetics:[...m.genetics],female_species:f.species_key||f.actor_class,male_species:m.species_key||m.actor_class,
       female_bonus_pct:individualMutationBonus(pair.female),male_bonus_pct:individualMutationBonus(pair.male),
-      character_name:BTView.document.extensions.active_character.name,character_bonus_pct:advisorCharacterBonus(),
+      character_name:selectedCharacter().name,character_slot:selectedCharacter().slot,character_bonus_pct:advisorCharacterBonus(),
       stat_goals:[...statGoals(nodeSpeciesKey(pair.female))],goals_key:nodeSpeciesKey(pair.female),method:'B2+C',max_attempts:300,max_stat:10,tolerance:.0001,cap:PairScoring.config.cap}};
   result.display=predictionDisplay(result);return result;
 }
@@ -1522,11 +1529,6 @@ function render({selectFirst=false}={}){
   hideTooltip();
   renderAdvisorControls();
   updateViewChrome();
-  if(experimentWrap)experimentWrap.hidden=activeView.kind!=='experiment';
-  if(activeView.kind==='experiment'){
-    globalThis.Experimenter?.render();
-    return;
-  }
   if(activeView.kind==='advisor'){
     renderAdvisor();
     return;
@@ -1923,7 +1925,6 @@ function promptAddRole(){
 }
 
 const LOCAL_POLL_MS=5000;
-const EXPECTED_GENETICS=['V','F','P','R','T','A','I'];
 let lastLocalStateSignature=null;
 let refreshInFlight=false;
 let currentPayload=null;
@@ -1956,7 +1957,7 @@ function syncGraphUserData(){
   const root=currentPayload.user_data&&typeof currentPayload.user_data==='object'&&!Array.isArray(currentPayload.user_data)
     ? currentPayload.user_data:{};
   const existing=root.graph&&typeof root.graph==='object'&&!Array.isArray(root.graph)?root.graph:{};
-  root.graph={...existing,schema_version:2,preferences:{...existing.preferences,...JSON.parse(JSON.stringify(preferences)),navigation:{...existing.preferences?.navigation,...JSON.parse(JSON.stringify(preferences.navigation))}},annotations:encodedAnnotations()};
+  root.graph={...existing,schema_version:2,preferences:{...JSON.parse(JSON.stringify(preferences)),navigation:{...existing.preferences?.navigation,...JSON.parse(JSON.stringify(preferences.navigation))}},annotations:encodedAnnotations()};
   currentPayload.user_data=root;
 }
 
@@ -2006,18 +2007,19 @@ function petByPersistentUid(uid){
 
 function breedingPairStatus(panel=breedingPanel){
   const female=petByPersistentUid(panel.female_bt_id),male=petByPersistentUid(panel.male_bt_id);
-  const complete=panel.female_bt_id!==null&&panel.male_bt_id!==null;
-  const resolved=!complete||Boolean(female&&male);
+  const sides=[['female',female,'F'],['male',male,'M']].filter(([side])=>panel[side+'_bt_id']!==null);
+  const complete=sides.length===2,resolved=sides.every(([,n])=>!!n);
+  const eligible=sides.every(([,n,sex])=>n&&hasPetName(n)&&stablePetId(n.bt_id)&&n.sex===sex&&n.lifecycleState==='ACTIVE'&&n.deathStatus!=='dead'&&!n.historical&&n.stage==='adult');
   const sameSpecies=!complete||!female||!male||nodeSpeciesKey(female)===nodeSpeciesKey(male);
-  const reason=complete&&!resolved?'One selected pet is no longer available.':complete&&!sameSpecies?'Female and male must belong to the same species.':'';
-  return {female,male,complete,resolved,sameSpecies,valid:complete&&resolved&&sameSpecies,reason};
+  const reason=!sides.length?'Select at least one eligible pet.':!resolved?'One selected pet is no longer available.':!eligible?'Only living active adults with a known sex can be sent.':!sameSpecies?'Female and male must belong to the same species.':'';
+  return {female,male,complete,resolved,sameSpecies,valid:sides.length>0&&eligible&&sameSpecies,reason};
 }
 
 function breederAssignmentBlockReason(n){
   if(n.stage!=='adult')return 'Only confirmed adults can be assigned';
   const uid=stablePetId(n.bt_id);
-  if(uid===null)return 'A persistent non-negative Icarus UID is required';
-  if(n.lifecycleState!=='ACTIVE'||n.historical||n.stage!=='adult')return 'Only active adult animals can be selected';
+  if(uid===null)return 'A persistent BT_ID is required';
+  if(n.lifecycleState!=='ACTIVE'||n.deathStatus==='dead'||n.historical||n.stage!=='adult')return 'Only active adult animals can be selected';
   if(n.sex!=='F'&&n.sex!=='M')return 'A known female or male sex is required';
   const otherUid=breedingPanel[n.sex==='F'?'male_bt_id':'female_bt_id'];
   const other=petByPersistentUid(otherUid);
@@ -2025,7 +2027,6 @@ function breederAssignmentBlockReason(n){
   return '';
 }
 
-function pairDisplayContext(){const f=petByPersistentUid(breedingPanel.female_bt_id),m=petByPersistentUid(breedingPanel.male_bt_id);return f&&m?currentPairKey(f,m):JSON.stringify([selectedDataset?.account_id,BTView.world,breedingPanel.female_bt_id,breedingPanel.male_bt_id])}
 function pairStatusContext(){return JSON.stringify([selectedDataset?.account_id,BTView.world,breedingPanel.female_bt_id,breedingPanel.male_bt_id,breedingPanelDirty])}
 function setPairStatus(message){breedingPairState.textContent=message;breedingPairState.dataset.context=pairStatusContext()}
 function renderBreedingPairPanel(){
@@ -2036,7 +2037,7 @@ function renderBreedingPairPanel(){
   const f=petByPersistentUid(femaleUid),m=petByPersistentUid(maleUid);
   const pair=f&&m?currentPairResult(f,m):null;
   const p=breedingPanel.prediction;
-  const qualityHtml=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pairDisplay(pair).average_quality+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,preferences)?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+predictionDisplay(p).average_quality+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(currentPairJob?.error||'Calculating predictions…'):'Select both parents')+'</div>';
+  const qualityHtml=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pairDisplay(pair).average_quality+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,preferences,selectedCharacter())?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+predictionDisplay(p).average_quality+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(GeneticQuality.prepare(statGoals(nodeSpeciesKey(f))).maxRaw?'Selected Character or individual bonus unavailable':'No selected stats'):'Select both parents')+'</div>';
   updateHtml(quality,qualityHtml);
   quality.dataset.context=context;
   nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
@@ -2051,8 +2052,11 @@ function renderBreedingPairPanel(){
   }
   if(breedingPairState.dataset.context!==pairStatusContext())setPairStatus(breedingPanelDirty?'Pending — not queued':'');
   const status=breedingPairStatus();
-  sendBreedingPairBtn.disabled=!status.valid;
-  sendBreedingPairBtn.title=status.reason||(!status.complete?'Select one female and one male.':'Queue the current pair for BreedingTool');
+  const contextReason=sendContextReason();
+  sendBreedingPairBtn.disabled=BTView.saving||!status.valid||!!contextReason;
+  sendBreedingPairBtn.title=contextReason||status.reason||'Queue the current selection for BreedingTool';
+  document.getElementById('contextAvailability').textContent=BTView.document?.worlds[BTView.world]?.storage_state==='archive'?'Archived World: consultation and analysis available; durable saving unavailable. Drafts are kept during navigation.':contextReason||'Matches last recorded context. Lua verifies the live context when applying.';
+  saveChoicesBtn.disabled=BTView.saving||BTView.document?.worlds[BTView.world]?.storage_state==='archive';
   sendBreedingPairBtn.classList.toggle('active',status.valid&&breedingPanelDirty);
 }
 
@@ -2121,16 +2125,17 @@ function canonicalName(value){
 
 function numericUid(value){return stablePetId(value)}
 
-function petId(uid){return uid}
 
 function applyCensus(document){
   validateCensus(document);
   const accountChanged=BTView.document?.account?.steam_id!==document.account.steam_id;
   if(accountChanged){
-    stashWorldDraft(); BTView.world=null; BTView.pinnedWorld=null;
+    stashWorldDraft(); BTView.world=null; BTView.pinnedWorld=null; BTView.character=null;
     userDataDirty=false; breedingPanelDirty=false;
   }
-  const nextWorld=BTView.pinnedWorld&&document.worlds[BTView.pinnedWorld]?BTView.pinnedWorld:document.active_world;
+  const saved=contextChoices.accounts[document.account.steam_id];
+  const requested=BTView.pinnedWorld||saved?.world;
+  const nextWorld=requested&&document.worlds[requested]?requested:document.active_world||Object.keys(document.worlds)[0]||null;
   const entering=accountChanged||BTView.world!==nextWorld;
   if(entering){
     if(!accountChanged)stashWorldDraft();
@@ -2140,10 +2145,13 @@ function applyCensus(document){
     BTView.world=nextWorld;
   }
   BTView.document=document;
+  const characters=knownCharacters();
+  BTView.character=[BTView.character,saved?.character,document.extensions?.active_character].map(wanted=>characters.find(c=>sameCharacter(c,wanted))).find(Boolean)||characters[0]||null;
+  rememberContext();
   let payload=BTData.project(document,nextWorld);
   if(entering){
     const navigation=payload.user_data.graph.navigation;
-    if(navigation){currentSpecies=navigation.species||'';activeView=navigation.view||{kind:'species',key:null};selected=navigation.selected||null}
+    if(navigation){currentSpecies=navigation.species||'';activeView=restoredView(navigation.view);selected=navigation.selected||null}
     Object.assign(advisorState,restoredAdvisorState(payload.user_data.graph.advisor));
   }
   selected=BTData.resolve(document.worlds[nextWorld],selected);
@@ -2151,7 +2159,8 @@ function applyCensus(document){
   if(draft&&!userDataDirty&&!breedingPanelDirty){
     hydrateGraphUserData(draft.payload); hydrateBreedingPanel(draft.payload);
     userDataDirty=draft.dirty; breedingPanelDirty=draft.pairDirty;
-    selected=draft.selected; currentSpecies=draft.species; activeView=draft.view;
+    payload.user_data.graph=BTData.copy(draft.payload.user_data.graph);payload.breeding_panel=BTData.copy(draft.payload.breeding_panel);
+    selected=draft.selected; currentSpecies=draft.species; activeView=restoredView(draft.view);
     Object.assign(advisorState,restoredAdvisorState(draft.advisor));
     BTView.base=draft.base; BTView.pairBase=draft.pairBase;
     BTView.drafts.delete(draftKey(nextWorld));
@@ -2164,7 +2173,6 @@ function applyCensus(document){
   if(!userDataDirty)hydrateGraphUserData(payload);
   if(!breedingPanelDirty)hydrateBreedingPanel(payload);
   currentPayload=payload;
-  globalThis.Experimenter?.refresh();
   if(userDataDirty)syncGraphUserData();
 
   const validPets=payload.pets.filter(p=>p.lifecycle_state!=='TRACKED'&&stablePetId(p.bt_id));
@@ -2172,15 +2180,15 @@ function applyCensus(document){
   const importedByUid=new Map();
   const importedByPet=new Map();
   
-  // PASS 1: rebuild one stable node per UID. No save-specific data is embedded.
-  for(const [sourceIndex,p] of validPets.entries()){
+  // PASS 1: rebuild one stable node per BT_ID. No save-specific data is embedded.
+  for(const p of validPets){
     const uid=numericUid(p.bt_id);
     const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const stats=p.genetics.map(value=>value===null?null:Number(value));
     const historical=p.historical===true;
     const isPresent=p.lifecycle_state==='ACTIVE';
     const n={
-      id:petId(uid),
+      id:uid,
       bt_id:uid,runtime_uid:p.runtime_uid,uid_history:p.uid_history,stage:p.stage,lifecycleState:p.lifecycle_state,deathStatus:p.death?.status,
       twinSource:p.twin_source??null,motherLabel:p.mother||'',fatherLabel:p.father||'',
       icarusName:p.name,
@@ -2214,7 +2222,6 @@ function applyCensus(document){
 
   // Deterministic BT_ID links only; parent labels remain historical metadata.
   for(const p of validPets){
-    const species=normalizeSpeciesKey(p.species_key||p.actor_class);
     const n=importedByPet.get(p);
     if(!n)continue;
     const motherUid=numericUid(p.mother_bt_id);
@@ -2318,7 +2325,7 @@ async function readDirectoryCommand(handle){
   }
 }
 
-const BTView={document:null,world:null,pinnedWorld:null,base:null,pairBase:null,drafts:new Map(),saving:false};
+const BTView={document:null,world:null,pinnedWorld:null,character:null,base:null,pairBase:null,drafts:new Map(),saving:false};
 const detailDrafts=new Map();
 function validateCensus(payload){BTData.validate(payload)}
 function stashWorldDraft(){
@@ -2329,29 +2336,34 @@ function stashWorldDraft(){
     dirty:userDataDirty,pairDirty:breedingPanelDirty,selected,species:currentSpecies,view:BTData.copy(activeView),advisor:BTData.copy(advisorState)});
 }
 function updateCharacterControl(){
-  const d=BTView.document,character=d?.extensions?.active_character;
-  const reliable=character&&BTView.world===d.active_world
-    &&selectedDataset?.account_id===d.account.steam_id;
-  const name=reliable&&typeof character.name==='string'&&character.name.trim()&&character.name.trim()!=='None'?character.name:'—';
-  const bonus=reliable&&name!=='—'&&typeof character.mutation_bonus_pct==='number'&&Number.isFinite(character.mutation_bonus_pct)
-    ?'+'+character.mutation_bonus_pct+'%':'—';
-  const lineage=reliable&&Number.isFinite(character.lineage_mutation_chance_pct)?'+'+character.lineage_mutation_chance_pct+'%':'—';
-  document.getElementById('characterState').textContent=name+' · '+bonus+' Genetics · '+lineage+' Lineage';
+  const select=document.getElementById('characterSelect'),characters=knownCharacters(),c=selectedCharacter();
+  const unknown=new Option('Unknown','');unknown.disabled=characters.length>0;
+  select.replaceChildren(unknown);
+  for(const x of characters)select.add(new Option(x.name+' · slot '+x.slot,JSON.stringify([x.slot,x.name])));
+  select.value=c?JSON.stringify([c.slot,c.name]):'';
+  const text=k=>c&&Number.isFinite(c[k])?'+'+c[k]+'%':'unknown';
+  document.getElementById('characterState').textContent=text('mutation_bonus_pct')+' Genetics · '+text('lineage_mutation_chance_pct')+' Lineage';
 }
 function updateWorldControls(){
   updateCharacterControl();
   const d=BTView.document,select=document.getElementById('worldSelect');
-  const chosen=BTView.pinnedWorld||'';
-  select.replaceChildren(new Option('Active world',''));
-  for(const [key,w] of Object.entries(d.worlds))select.add(new Option(w.metadata.prospect_id||key,key));
-  select.value=chosen;
-  const w=d.worlds[BTView.world];
-  document.getElementById('worldState').textContent=w?`${w.metadata.prospect_id}`:'Waiting for a world';
+  select.replaceChildren();
+  for(const [key,w]of Object.entries(d.worlds))select.add(new Option((w.metadata.prospect_id||key)+(w.storage_state==='archive'?' (archived)':''),key));
+  select.value=BTView.world||'';
+  document.getElementById('worldState').textContent=d.worlds[BTView.world]?.metadata.prospect_id||'No recorded World';
 }
 document.getElementById('worldSelect').addEventListener('change',event=>{
+  if(BTView.saving||refreshInFlight){updateWorldControls();return}
   BTView.pinnedWorld=event.target.value||null;
   if(BTView.document)applyCensus(BTView.document);
 });
+document.getElementById('characterSelect').addEventListener('change',event=>{
+  if(BTView.saving||refreshInFlight){updateCharacterControl();return}
+  const key=event.target.value;
+  BTView.character=knownCharacters().find(c=>JSON.stringify([c.slot,c.name])===key)||null;
+  rememberContext();updateCharacterControl();render();renderBreedingPairPanel();refreshSelectedDetail();
+});
+
 document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
   if(BTView.saving)return;
   if((userDataDirty||breedingPanelDirty)&&!confirm('Discard unsaved choices for this world and reload the saved version?'))return;
@@ -2360,59 +2372,69 @@ document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
   if(BTView.document)applyCensus(BTView.document);
   refreshJson(true);
 });
+function prepareCurrentPair(){
+  const status=breedingPairStatus();
+  if(sendContextReason()||!status.valid)return null;
+  const pair={female_bt_id:breedingPanel.female_bt_id,male_bt_id:breedingPanel.male_bt_id};
+  if(status.complete){
+    const result=currentPairResult(status.female,status.male);
+    const prediction=result?advisorPairPrediction(result):null;
+    if(prediction&&BTStores.predictionValid(BTView.document,BTView.world,{...pair,prediction},preferences,selectedCharacter()))pair.prediction=prediction;
+  }
+  const character=selectedCharacter();
+  return {pair,character:{slot:character.slot,name:character.name},additional:pair.prediction?[{path:['worlds',BTView.world,'graph','preferences','advisorGoals'],value:BTData.copy(preferences.advisorGoals)}]:[]};
+}
+function acceptQueuedPair(prepared,world,account){
+  if(!prepared)return;
+  const sameSelection=p=>p.female_bt_id===prepared.pair.female_bt_id&&p.male_bt_id===prepared.pair.male_bt_id;
+  if(account===BTView.document?.account?.steam_id&&world===BTView.world){
+    if(sameSelection(breedingPanel)){breedingPanel=BTData.copy(prepared.pair);breedingPanelDirty=false}
+    BTView.pairBase=BTData.copy(prepared.pair);
+  }else{
+    const draft=BTView.drafts.get(draftKey(world,account));
+    if(draft){if(sameSelection(draft.payload.breeding_panel)){draft.payload.breeding_panel=BTData.copy(prepared.pair);draft.pairDirty=false}draft.pairBase=BTData.copy(prepared.pair)}
+  }
+}
 async function sendBreedingPanel(){
   if(BTView.saving)throw new Error('A save is already in progress');
-  if(!breedingPairStatus().valid)throw new Error(breedingPairStatus().reason);
-  const dataset=selectedDataset;
-  if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
-  const world=BTView.world,submitted=BTData.copy(breedingPanel);
-  if(submitted.prediction){submitted.prediction.display=predictionDisplay(submitted.prediction);breedingPanel.prediction.display=BTData.copy(submitted.prediction.display)}
-  if(submitted.prediction&&!BTStores.predictionValid(BTView.document,world,submitted,preferences)){delete submitted.prediction;delete breedingPanel.prediction}
-  const additional=submitted.prediction?[{path:['worlds',world,'graph','preferences','advisorGoals'],value:BTData.copy(preferences.advisorGoals)}]:[];
+  const reason=sendContextReason()||breedingPairStatus().reason;if(reason)throw new Error(reason);
+  const dataset=selectedDataset,world=BTView.world,prepared=prepareCurrentPair();
+  if(!prepared)throw new Error('No eligible selection');
   BTView.saving=true;
   try{
-    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'current_pair'],message=>setPairStatus(message),additional);
-    if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
-      breedingPanelDirty=!BTData.same(breedingPanel,submitted);
-      BTView.pairBase=submitted;
-    }else{
-      const draft=BTView.drafts.get(draftKey(world,dataset.account_id));
-      if(draft){draft.pairDirty=!BTData.same(draft.payload.breeding_panel,submitted);draft.pairBase=submitted}
-    }
-    setPairStatus(result?.queued?'Pair queued ✓ — use Refresh in game to apply':'Pair already current ✓');
+    const result=await BTData.submit(localDirectoryHandle,dataset,world,prepared.pair,['worlds',world,'current_pair'],message=>setPairStatus(message),prepared.additional,prepared.character);
+    acceptQueuedPair(prepared,world,dataset.account_id);
+    setPairStatus(result?.queued?'Pair queued ✓ — Lua verifies the live context before applying':'Pair already current ✓');
     return result;
-  }finally{BTView.saving=false}
+  }finally{BTView.saving=false;renderBreedingPairPanel()}
 }
 async function saveChoices(){
   if(BTView.saving)throw new Error('A save is already in progress');
   if(!currentPayload||!BTView.world)throw new Error('Wait for a world first');
+  if(BTView.document.worlds[BTView.world]?.storage_state==='archive')throw new Error('Archived World choices cannot be saved by the current Lua mailbox. Draft retained.');
   syncGraphUserData();
   const dataset=selectedDataset;
   if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
-  const world=BTView.world,submitted=BTData.copy(currentPayload.user_data.graph);
+  const world=BTView.world,submitted=BTData.copy(currentPayload.user_data.graph),prepared=prepareCurrentPair();
   submitted.navigation={species:currentSpecies,view:BTData.copy(activeView),selected};
   submitted.advisor=BTData.copy(advisorState);
+  const additional=prepared?[{path:['worlds',world,'current_pair'],value:prepared.pair}]:[];
   BTView.saving=true;saveChoicesBtn.disabled=true;
   try{
-    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message);
+    const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message,additional,prepared?.character);
     if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
       syncGraphUserData();
-      const now=BTData.copy(currentPayload.user_data.graph);
-      now.navigation=submitted.navigation;now.advisor=submitted.advisor;
-      userDataDirty=!BTData.same(now,submitted);
-      BTView.base=submitted;
+      const now=BTData.copy(currentPayload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;
+      userDataDirty=!BTData.same(now,submitted);BTView.base=submitted;
     }else{
       const draft=BTView.drafts.get(draftKey(world,dataset.account_id));
-      if(draft){
-        const now=BTData.copy(draft.payload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;
-        draft.dirty=!BTData.same(now,submitted);draft.base=submitted;
-      }
+      if(draft){const now=BTData.copy(draft.payload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;draft.dirty=!BTData.same(now,submitted);draft.base=submitted}
     }
-    saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';
-    saveChoicesBtn.classList.toggle('active',userDataDirty);
-    importBadge.textContent=result?.queued?'Changes queued ✓ — use Refresh in game to apply':'Choices already current ✓';
+    acceptQueuedPair(prepared,world,dataset.account_id);
+    saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';saveChoicesBtn.classList.toggle('active',userDataDirty);
+    importBadge.textContent=result?.queued?'Choices'+(prepared?' and selection':'')+' queued ✓ — apply with the mod':'Choices already current ✓';
     return result;
-  }finally{BTView.saving=false;saveChoicesBtn.disabled=false}
+  }finally{BTView.saving=false;renderBreedingPairPanel()}
 }
 
 async function pickJsonFile(){
@@ -2447,7 +2469,9 @@ async function applyJsonText(text,source,force,commandText=null){
         if(advisorStateNode)advisorStateNode.textContent='Queued ✓ — use Refresh in game to apply';
       }
     }else{
-      importBadge.textContent=`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
+      const receipt=persisted.transport?.last_command;
+      importBadge.textContent=receipt?.current_pair_status==='rejected_context'?'Current Pair rejected by Lua: live context differs. Valid choices were processed according to receipt status ('+receipt.status+').':`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
+      if(receipt?.current_pair_status==='rejected_context')setPairStatus('Current Pair rejected: live Account / World / Character differs.');
     }
   }else if(commandText && JSON.parse(commandText)?.account_id===BTView.document?.account?.steam_id){
     importBadge.textContent='Changes queued ✓ — use Refresh in game to apply';
@@ -2468,7 +2492,7 @@ async function connectDirectory(){
       if(!datasets.length)throw new Error('No valid account datasets found');
       stashWorldDraft();
       localDirectoryHandle=chosen; availableDatasets=datasets;
-      selectedDataset=datasets.length===1?datasets[0]:null;
+      selectedDataset=datasets.find(d=>d.account_id===contextChoices.account)||(datasets.length===1?datasets[0]:null);
       updateAccountControls();
       updateConnectionControls(); void rememberDirectory(chosen);
       if(!selectedDataset){importBadge.textContent='Select an account';return}
@@ -2514,7 +2538,7 @@ async function refreshJson(force=false){
     }
     if(!localDirectoryHandle||force){
       availableDatasets=await BTData.discover(handle);
-      selectedDataset=availableDatasets.find(d=>d.account_id===selectedDataset?.account_id&&d.filename===selectedDataset?.filename)||(availableDatasets.length===1?availableDatasets[0]:null);
+      selectedDataset=availableDatasets.find(d=>d.account_id===(selectedDataset?.account_id||contextChoices.account))||(availableDatasets.length===1?availableDatasets[0]:null);
       localDirectoryHandle=handle;updateAccountControls();updateConnectionControls();
     }
     if(!selectedDataset){importBadge.textContent=availableDatasets.length?'Select an account':'No valid account datasets found';return}
@@ -2558,7 +2582,7 @@ function updateAccountControls(){
 accountSelect.addEventListener('change',async()=>{
   if(refreshInFlight||BTView.saving){updateAccountControls();return}
   selectedDataset=availableDatasets.find(d=>d.filename===accountSelect.value)||null;
-  updateCharacterControl();
+  renderBreedingPairPanel();
   lastLocalStateSignature=null;
   await refreshJson();
 });
@@ -2668,7 +2692,7 @@ sendBreedingPairBtn.addEventListener('click',async()=>{
   }catch(err){
     setPairStatus(`Not queued: ${err.message||String(err)}`);
   }finally{
-    sendBreedingPairBtn.disabled=!breedingPairStatus().valid;
+    renderBreedingPairPanel();
   }
 });
 function clearGlobalSearch(){
@@ -2689,10 +2713,6 @@ function inspectUidElement(event){
 }
 document.addEventListener('click',inspectUidElement,true);
 document.addEventListener('keydown',inspectUidElement,true);
-document.addEventListener('change',event=>{
- if(!['experimentFemale','experimentMale','experimentExcludePet'].includes(event.target.id))return;
- const pet=petByPersistentUid(event.target.value);if(pet)selectPet(pet.id,{rerender:false});
-});
 
 document.getElementById('recommendPairBtn').addEventListener('click',async()=>{
  const before=JSON.stringify([breedingPanel,breedingPanelDirty]);let scope=advisorPairs();

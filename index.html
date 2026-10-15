@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V5.1.2</title>
+<title>Breeding Tool — V1.0.0</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="ui-p3.css">
 </head>
@@ -11,8 +11,8 @@
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V5.1.2</span></h1>
-    <div class="subtitle">Private pedigrees and breeding tools generated from your local pet data.</div>
+    <h1>Breeding Tool <span class="version">V1.0.0</span></h1>
+    <div class="subtitle">Local pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
       <button type="button" class="theme-option" data-theme-choice="default" aria-pressed="true">Default</button>
@@ -28,7 +28,7 @@
     <span class="badge" id="importBadge">JSON: not connected</span>
     <button class="control" id="disconnectBtn" title="Forget the selected local folder" hidden>Disconnect</button>
     <div class="folder-help">
-      Select the <strong>BreedingTool</strong> folder containing your migrated pet data.
+      Select the <strong>BreedingTool</strong> folder containing your pet data.
       <span class="folder-path">Typical Steam location: <code>...\SteamLibrary\steamapps\common\Icarus\Icarus\Binaries\Win64\ue4ss\Mods\BreedingTool</code></span>
     </div>
   </div>
@@ -39,13 +39,12 @@
   <button class="tab view-tab view-all" id="pedigreeBtn">Pedigree</button>
   <button class="tab view-tab view-breeding breeding-access" id="breedingBtn">Board</button>
   <button class="tab view-tab view-advisor breeding-access" id="advisorBtn">Advisor</button>
-  <button class="tab view-tab" id="experimentBtn">Experiment</button>
 </div>
 <div class="global-toolbar" aria-label="Global tools">
   <div class="global-toolbar-left">
 <label>Account: <select class="control" id="accountSelect"><option value="">Select account</option></select></label>
-<span class="small character-context">| Character: <span id="characterState">—</span> |</span>
-<label>World: <select class="control" id="worldSelect"><option value="">Active world</option></select></label><span class="small" id="worldState"></span>
+<span class="small character-context">| Character: <select class="control" id="characterSelect" aria-label="Character"><option value="">Unknown</option></select> <span id="characterState">—</span> |</span>
+<label>World: <select class="control" id="worldSelect"><option value="">Active world</option></select></label><span class="small" id="worldState"></span><span class="small" id="contextAvailability" role="status"></span>
     <button class="control" id="inactiveToggleBtn" title="Show pets excluded from breeding" aria-pressed="false">Show inactive</button>
   </div>
   <div class="global-toolbar-right">
@@ -98,7 +97,6 @@
       </div>
       <span id="countText"></span>
     </div>
-    <section class="experiment-wrap" id="experimentWrap" aria-label="Snow Wolf genetics laboratory" lang="fr" hidden></section>
     <div class="advisor-wrap" id="advisorWrap">
       <div class="advisor-intro">
         <div>
@@ -106,7 +104,7 @@
           <h2>Advisor</h2>
           <p>Deterministic next-generation useful quality. Select a breeder to change only that side of Current Pair.</p>
         </div>
-        <span class="advisor-prototype-badge">Native predictions · V5.1.2</span>
+        <span class="advisor-prototype-badge">Native predictions · V1.0.0</span>
       </div>
       <div id="advisorSettings" hidden><div class="advisor-config-grid">
         <div class="advisor-config-main">
@@ -154,22 +152,6 @@
 <div class="tooltip" id="tooltip"></div>
 <input id="jsonFileFallback" type="file" accept="application/json,.json" hidden>
 
-<dialog id="experimentPublishDialog" class="experiment-publish-dialog" aria-labelledby="experimentPublishTitle">
-  <form id="experimentPublishForm" autocomplete="off">
-    <h2 id="experimentPublishTitle">Publier les résultats sur GitHub</h2>
-    <p>Dépôt privé <strong>taitsuo/chatgpt-icarus</strong>, branche <strong>main</strong>.<br>Le fichier <strong>research/genetics/latest.json</strong> sera remplacé par le format P4 : expérience primaire, expériences conservées, historique séparé et observations originales.</p>
-    <p id="experimentPublishSummary"></p>
-    <p>Créer un <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">jeton personnel à permissions fines</a> : propriétaire taitsuo, uniquement le dépôt chatgpt-icarus, permission <strong>Contents: Read and write</strong>. Metadata en lecture est ajoutée par GitHub. Choisir une expiration courte. Les droits portent sur le dépôt, pas uniquement sur ce fichier.</p>
-    <label for="experimentGithubToken">Jeton GitHub</label>
-    <input class="control" id="experimentGithubToken" type="password" autocomplete="off" spellcheck="false" required>
-    <label class="experiment-checkbox"><input id="experimentRememberGithubToken" type="checkbox"> Mémoriser le token sur cet ordinateur</label>
-      <button class="control" id="experimentForgetGithubToken" type="button">Oublier le token</button>
-      <p id="experimentGithubStorageState" role="status"></p>
-      <p>Option désactivée par défaut. Un jeton mémorisé dans le navigateur reste accessible aux scripts de cette origine. Utilisez un ordinateur de confiance. Un jeton valide peut être réutilisé jusqu’à expiration ou révocation. Le jeton n’est jamais exporté ni journalisé. Les Steam ID, identifiants de compte et données runtime inutiles sont exclus de l’export.</p>
-    <div class="experiment-actions"><button class="control" type="button" id="experimentPublishCancel">Annuler</button><button class="control primary-control" id="experimentPublishConfirm" type="submit" disabled>Publier et remplacer latest.json</button></div>
-  </form>
-</dialog>
-<script src="breeding-math.js"></script>
 <script src="stores.js"></script>
 <script src="data.js"></script>
 <script src="native-genetics.js"></script>
@@ -179,8 +161,6 @@
 <script src="advisor-best.js"></script>
 <script src="offspring-preview.js"></script>
 <script src="bloodline-prediction.js"></script>
-<script src="hypothesis-lab.js"></script>
-<script src="experiment-ui.js"></script>
 <script>
 (()=>{
  const sticky=document.querySelector('.sticky-tools'),toolbar=document.querySelector('.global-toolbar'),nav=document.querySelector('.tool-nav');
@@ -193,7 +173,7 @@
  document.querySelector('.global-toolbar-right').prepend(document.getElementById('inactiveToggleBtn'));
  const command=document.createElement('details');command.className='extra-commands';command.innerHTML='<summary>More</summary><div></div>';
  document.querySelector('.global-toolbar-right').append(command);
- for(const id of ['cancelCommandBtn','reloadChoicesBtn','disconnectBtn','experimentBtn'])command.lastElementChild.append(document.getElementById(id));
+ for(const id of ['cancelCommandBtn','reloadChoicesBtn','disconnectBtn'])command.lastElementChild.append(document.getElementById(id));
  const reference=document.createElement('details');reference.className='genotype-reference-menu';reference.innerHTML='<summary>Genotype reference</summary>';reference.append(document.getElementById('advisorStatReference'));command.lastElementChild.append(reference);
  const pairActions=document.querySelector('.pair-heading .breeding-pair-actions');pairActions.innerHTML='<button class="control" id="recommendPairBtn">↺ Best pair</button><button class="control" id="clearBreedingPairBtn">Clear pair</button><button class="control primary-control" id="sendBreedingPairBtn" disabled>Send to Breeding Panel</button>';
  const main=document.querySelector('.mainpanel');main.dataset.blockId='main-view';main.classList.add('movable-block');

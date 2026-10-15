@@ -555,107 +555,6 @@ svg{display:block;min-width:100%;}
   --material-frame:none;
 }
 
-/* Experiment P2 uses the existing theme and shared controls. */
-.experiment-wrap{padding:20px;color:var(--text)}
-.experiment-wrap[hidden]{display:none}
-.experiment-wrap p{line-height:1.6;color:var(--muted)}
-.experiment-wrap input{width:90px}
-.experiment-wrap select{max-width:100%}
-.experiment-section{padding:16px 0;border-bottom:1px solid var(--border)}
-.experiment-section h2{margin-top:0}
-.experiment-card,.experiment-chart{margin:14px 0;padding:16px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
-.experiment-pair,.experiment-controls{display:flex;flex-wrap:wrap;gap:18px;margin:12px 0}
-.experiment-pair>*{flex:1;min-width:240px}
-.experiment-controls label{max-width:100%}
-.experiment-pet,.experiment-estimate{display:grid;gap:6px;min-width:240px;overflow-wrap:anywhere}
-.experiment-pet span,.experiment-estimate span{font-size:12px}
-.experiment-warning,.experiment-wrap p.experiment-warning{color:#e6ae76}
-.experiment-wrap progress{width:100%;accent-color:var(--active)}
-.experiment-wrap details{padding:12px 0}
-.experiment-wrap summary{cursor:pointer;line-height:1.6}
-.experiment-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px}
-.experiment-chart h3{font-size:14px}
-.experiment-histogram{display:flex;gap:4px;align-items:end;padding:10px 0;border-bottom:1px solid var(--border)}
-.experiment-bin{flex:1;display:flex;flex-direction:column;justify-content:end;align-items:center;height:145px;gap:6px;font-size:12px}
-.experiment-bar{width:80%;min-height:1px;background:var(--active)}
-.experiment-table-scroll{overflow:auto;max-height:520px;margin:12px 0}
-.experiment-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}
-.experiment-table td,.experiment-table th{padding:9px;border-bottom:1px solid var(--border);vertical-align:top}
-.experiment-table th{position:sticky;top:0;background:var(--panel);z-index:1}
-.experiment-sum-chart{display:block;width:100%;max-width:850px;color:var(--muted);background:var(--card);border:1px solid var(--border)}
-.experiment-sum-chart circle{fill:var(--active);opacity:.6}
-.experiment-sum-chart text{fill:currentColor;font-size:12px}
-#experimentSendState{display:inline-block;margin:8px}
-
-/* Experiment P3: readable conclusions, explicit actions and secondary detail. */
-.experiment-wrap [hidden]{display:none!important}
-.experiment-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}
-.experiment-metrics>div{display:grid;gap:6px;padding:14px;border:1px solid var(--border);border-radius:6px;background:var(--card)}
-.experiment-metrics strong{font-size:22px}.experiment-metrics span{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.experiment-actions{display:flex;align-items:start;flex-wrap:wrap;gap:14px;margin:12px 0}
-.experiment-action{display:grid;gap:6px;max-width:280px}.experiment-action small{color:var(--muted);line-height:1.5}
-.experiment-lessons{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
-.experiment-lessons .experiment-card{margin:0}.experiment-lessons h3{font-size:15px;margin:0 0 8px}.experiment-lessons p{margin:0}
-.experiment-advanced{margin-top:20px;border:1px solid var(--border);border-radius:6px;padding:16px!important}
-.experiment-advanced>summary{font-size:17px;font-weight:600}.experiment-advanced .experiment-section{padding:20px 0}
-.experiment-publish-dialog{max-width:620px;width:calc(100% - 48px);max-height:85vh;overflow:auto;padding:24px;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px}
-.experiment-publish-dialog::backdrop{background:#0009}.experiment-publish-dialog p{color:var(--muted);line-height:1.6}
-.experiment-publish-dialog label{display:block;margin-bottom:8px}.experiment-publish-dialog input{box-sizing:border-box;width:100%}
-.experiment-publish-dialog a{color:var(--active)}
-@media(max-width:640px){.experiment-wrap{padding:12px}.experiment-pair>*{min-width:0;flex-basis:100%}.experiment-lessons{grid-template-columns:1fr}.experiment-controls label{display:grid;gap:6px}}
-
-/* P4 keeps the analysis context visible and separate from series actions. */
-.experiment-context{padding:16px;margin-bottom:12px;border:1px solid var(--border);border-left:4px solid var(--active);background:var(--card)}
-.experiment-context.is-history{border-left-color:var(--female)}
-.experiment-context h2{overflow-wrap:anywhere;margin:8px 0}
-.experiment-context [aria-pressed="true"]{border-color:var(--active);color:var(--text);font-weight:700}
-.experiment-context label{display:grid;gap:8px;max-width:100%}
-.experiment-context select{width:100%}
-
-/* Optional distribution summaries share the P4 context and theme. */
-.experiment-chart-heading{display:flex;justify-content:space-between;align-items:start;gap:16px;flex-wrap:wrap}
-.experiment-generation-numbers{margin:0 0 12px!important;white-space:nowrap;font-size:14px}.experiment-generation-numbers strong{color:var(--text)}
-.experiment-checkbox{display:flex!important;align-items:center;gap:8px;margin:12px 0}.experiment-checkbox input,.experiment-publish-dialog .experiment-checkbox input{width:auto}
-.experiment-distribution{min-width:0;border:1px solid var(--border);border-radius:6px;padding:12px}.experiment-distribution .experiment-chart{border:0;padding:0;margin:0}
-.experiment-charts.is-aggregated{grid-template-columns:1fr}.experiment-charts.is-aggregated .experiment-histogram{max-width:900px}
-.experiment-comparisons{display:grid;gap:12px;font-size:12px}.experiment-comparisons h4{margin:12px 0 8px}.experiment-comparisons dl{margin:0}
-.experiment-comparisons dl>div{display:flex;justify-content:space-between;gap:8px;padding:4px 0}.experiment-comparisons dd{margin:0;text-align:right}.experiment-comparisons p{margin:6px 0}
-.experiment-charts.is-aggregated .experiment-comparisons{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
-
-.experiment-exclusions select,.experiment-exclusions textarea{width:100%;box-sizing:border-box}.experiment-exclusions label{display:grid;gap:8px;margin:12px 0}.experiment-exclusions .experiment-pet{margin:12px 0}
-
-.experiment-metadata{display:grid;gap:12px;margin:16px 0}.experiment-metadata label{display:grid;gap:8px;font-weight:600}.experiment-metadata input,.experiment-metadata textarea{box-sizing:border-box;width:100%}.experiment-metadata textarea{resize:vertical;min-height:100px;white-space:pre-wrap}
-
-/* The lab is scoped to Experiment; legacy charts and other views retain their styles. */
-.hypothesis-average{grid-column:1/-1;overflow:hidden}.hypothesis-average svg{display:block;width:100%;height:auto;max-height:420px}.hypothesis-average svg text{fill:var(--text);font-size:11px}.hypothesis-average svg line{stroke:var(--border);stroke-width:1}.hyp-observed{fill:var(--active)}.hyp-predicted{fill:#db9e55}.hyp-legend{display:flex;flex-wrap:wrap;gap:18px}.hyp-legend span:first-child{color:var(--active)}.hyp-legend span:last-child{color:#db9e55}
-.hypothesis-lab{margin:18px 0;padding:14px;border:1px solid var(--border);border-radius:6px;overflow-wrap:anywhere}.hypothesis-lab>summary{font-size:17px;font-weight:600;cursor:pointer}.hyp-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px;align-items:start}.hypothesis-lab label{display:grid;gap:6px;margin:10px 0;min-width:0}.hypothesis-lab input,.hypothesis-lab textarea,.hypothesis-lab select{width:100%;box-sizing:border-box;min-width:0;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:8px}.hypothesis-lab textarea{resize:vertical;font-family:monospace}.hypothesis-lab button{color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:8px;cursor:pointer}.hypothesis-lab [data-hyp-status]{white-space:pre-wrap}
-@media(min-width:1600px){#experimentMainHistograms:not(.is-aggregated){grid-template-columns:repeat(5,minmax(0,1fr))}#experimentMainHistograms:not(.is-aggregated) .hypothesis-average{grid-column:span 3}}
-@media(max-width:640px){#experimentMainHistograms{grid-template-columns:minmax(0,1fr)}.hypothesis-average{padding:8px}.hypothesis-lab{padding:10px}}
-
-.hypothesis-average pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
-
-.hypothesis-average svg .hyp-observed-label{fill:var(--active)}.hypothesis-average svg .hyp-predicted-label{fill:#db9e55}
-
-/* Experiment presentation uses the shared movable/collapsible block machinery. */
-.experiment-movable{border:1px solid var(--border,#575746);border-radius:9px;padding:18px;margin:0 0 18px;background:var(--theme-toolbar,#191c17)}
-.experiment-movable>.experiment-block-heading{cursor:pointer;padding-right:76px;margin-top:0;min-height:30px}
-.experiment-movable.is-collapsed{padding-bottom:8px}.experiment-movable .experiment-chart-heading{align-items:flex-start}
-.experiment-budget-bars{height:235px;display:flex;align-items:flex-end;justify-content:space-evenly;gap:16px;border-bottom:1px solid var(--border,#575746);margin:12px 0;overflow-x:auto}
-.experiment-budget-bin{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:7px;flex:1;min-width:42px;max-width:220px;height:100%}
-.experiment-budget-bin>div{width:75%;background:#3567a7;border-radius:7px 7px 0 0}.experiment-budget-bin strong,.experiment-budget-bin span{flex:none}
-.hypothesis-lab{border:0;padding:0;margin:0}.hypothesis-lab input,.hypothesis-lab select,.hypothesis-lab textarea{max-width:100%;min-width:0;box-sizing:border-box}
-.hyp-primary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.hyp-primary label,.hypothesis-lab label{display:flex;flex-direction:column;gap:6px}
-.hyp-toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.hyp-toolbar>label{flex:1;min-width:180px}.hyp-save-state{font-weight:bold}.hypothesis-lab details{margin-top:18px;padding-top:12px;border-top:1px solid var(--border,#575746)}
-@media(max-width:640px){.hyp-primary{grid-template-columns:1fr}.experiment-movable{padding:12px}.experiment-movable>.experiment-block-heading{font-size:17px}.experiment-chart-heading{flex-direction:column}.experiment-generation-numbers{white-space:normal}}
-
-/* Keep the budget comparison readable inside its horizontal scroll area. */
-[data-hyp-budget-evaluation] .experiment-table{min-width:850px}
-[data-hyp-budget-evaluation] .experiment-table th{min-width:95px}
-
-.hypothesis-average .hyp-observed{fill:#83b876}.hypothesis-average .hyp-observed-label{fill:#83b876}.hypothesis-average .hyp-legend span:first-child{color:#83b876}
-
-/* Native predictions reuse the observed/expected chart palette. */
-.hyp-native-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}.hyp-native-grid svg{display:block;width:100%;height:auto}.hyp-native-grid text{fill:var(--text,#ddd);font-size:11px}.hyp-native-distributions{margin-top:16px}[data-native-panel] .hyp-primary{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 
 .advisor-objectives{grid-template-columns:repeat(2,minmax(0,1fr))}
 .advisor-prediction-chart{display:block;min-width:0;width:100%;max-width:640px;max-height:320px;margin:auto;background:#111923;border-radius:8px}
@@ -670,7 +569,6 @@ svg{display:block;min-width:100%;}
 .advisor-panel-heading .block-drag-handle{position:static;display:inline-block;cursor:grab;font-size:24px;opacity:.8}
 .advisor-stat-toggle.goal-max{background:#24533b;color:#baffd3;border-color:#50b77c}
 .advisor-stat-toggle.goal-ignore{background:#183c61;color:#bfdeff;border-color:#5298d6}
-.advisor-stat-toggle.goal-min{background:#602c31;color:#ffd0d4;border-color:#d6757e}
 .advisor-prediction-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(180px,1fr);gap:22px;align-items:start}
 .advisor-prediction-chart{width:100%;max-height:none;max-width:800px;min-height:340px}
 .advisor-prediction-chart .advisor-chart-mean{text-anchor:start;font-size:11px;paint-order:stroke;stroke:#141c27;stroke-width:3px;stroke-linejoin:round}
@@ -679,3 +577,6 @@ svg{display:block;min-width:100%;}
 @media(max-width:850px){.advisor-prediction-layout{grid-template-columns:1fr}.advisor-prediction-chart{min-height:270px}}
 
 .pair-common-stats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center;margin:10px 0}.pair-common-stats>div{display:flex;flex-direction:column;gap:4px}.pair-common-stats span{color:var(--muted,#aaa58f)}.pair-common-stats strong{font-size:1.15rem}
+
+#sendBreedingPairBtn:disabled, #saveChoicesBtn:disabled { opacity:.45; cursor:not-allowed; }
+#contextAvailability { flex-basis:100%; }
