@@ -24,18 +24,18 @@ globalThis.BTStores=(()=>{
     const v=p?.provenance;
     return object(p)&&p.schema===2&&typeof p.model==='string'&&typeof p.quality_policy==='string'&&Number.isFinite(p.expected_quality)&&p.expected_quality>=0&&p.expected_quality<=70&&vector(p.expected_genetics)&&object(v)
       &&['account_id','world','female_bt_id','male_bt_id','goals_key','female_species','male_species','character_name'].every(k=>typeof v[k]==='string')
+      &&Number.isInteger(v.character_slot)&&v.character_slot>=0
       &&vector(v.female_genetics,true)&&vector(v.male_genetics,true)&&goalVector(v.stat_goals)
       &&['character_bonus_pct','female_bonus_pct','male_bonus_pct'].every(k=>Number.isFinite(v[k])&&v[k]>=0)
       &&p.units==='useful-genetic-points'&&v.method==='B2+C'&&v.max_attempts===300&&v.max_stat===10&&v.tolerance===.0001&&v.cap===60
       &&p.maximum_quality===10*v.stat_goals.filter(g=>g==='MAX').length&&p.expected_quality<=p.maximum_quality
       &&Number.isFinite(p.expected_budget)&&Math.abs(p.expected_budget-p.expected_genetics.reduce((s,v)=>s+v,0))<1e-8&&p.expected_budget<=60;
   }
-  function predictionValid(d,key,pair,overridePreferences,character=d.extensions?.active_character){
+  function predictionValid(d,key,pair,overrideGoals,character=d.extensions?.active_character){
     const p=pair?.prediction,v=p?.provenance,w=d.worlds?.[key],c=character;
     if(!predictionShape(p)||p.schema!==2||p.model!=='iid-b2c-v1'||p.quality_policy!=='useful-max-points-v1'||!w||!c||!c.name||c.name==='None')return null;
     if(v.account_id!==d.account.steam_id||v.world!==key||v.character_name!==c.name||v.character_slot!==c.slot||v.character_bonus_pct!==c.mutation_bonus_pct)return null;
-    const pref=overridePreferences||{...d.user_data.preferences,...d.user_data.worlds[key]?.graph?.preferences};
-    let goals=pref.advisorGoals?.[v.goals_key];
+    let goals=(overrideGoals||d.user_data.preferences.advisorGoals||{})[v.goals_key];
     goals=goals||['MAX','MAX','MAX','MAX','MAX','MAX','IGNORE'];
     if(!goalVector(goals)||!equal(goals,v.stat_goals))return null;
     const expected=p.expected_genetics.reduce((s,x,i)=>s+(v.stat_goals[i]==='MAX'?x:0),0);if(Math.abs(expected-p.expected_quality)>1e-8)return null;
@@ -164,12 +164,12 @@ globalThis.BTStores=(()=>{
     walk();return value;
   }
   async function collect(directory,files){
-    const raw={},stores={};
+    const raw={},stores={};let dataLastModified=null;
     for(const kind of ['data','tracked','cheptel']){
-      try{const entry=await directory.getFileHandle(files[kind]);const file=await entry.getFile();raw[kind]=new Uint8Array(await file.arrayBuffer());const text=new TextDecoder('utf-8',{fatal:true}).decode(raw[kind]);stores[kind]=parse(text)}
+      try{const entry=await directory.getFileHandle(files[kind]);const file=await entry.getFile();if(kind==='data'&&Number.isFinite(file.lastModified)&&file.lastModified>=0)dataLastModified=file.lastModified;raw[kind]=new Uint8Array(await file.arrayBuffer());const text=new TextDecoder('utf-8',{fatal:true}).decode(raw[kind]);stores[kind]=parse(text)}
       catch(e){throw new Error(`${files[kind]}: store missing, unreadable or invalid (${e.message})`)}
     }
-    return {raw,stores};
+    return {raw,stores,dataLastModified};
   }
   const bytesEqual=(a,b)=>a.length===b.length&&a.every((v,i)=>v===b[i]);
   const observed=new WeakMap();
@@ -186,7 +186,7 @@ globalThis.BTStores=(()=>{
       const before=prior.stores[kind],after=second.stores[kind];insist(after.revision>=before.revision,`Account ${tag}: ${kind} revision regressed`);
       insist(after.revision!==before.revision||bytesEqual(prior.raw[kind],second.raw[kind]),`Account ${tag}: ${kind} diverged without revision change`);
     }
-    cache.set(a.steam_id,second);return views;
+    cache.set(a.steam_id,second);return {...views,dataLastModified:second.dataLastModified};
   }
   async function discover(directory){
     const all=await names(directory),groups=new Map();
@@ -198,7 +198,7 @@ globalThis.BTStores=(()=>{
     for(const {tag,files}of groups.values()){
       insist(['data','tracked','cheptel'].every(k=>files[k]),`Account ${tag}: all three stores required; incomplete set`);
       const item={tag,files,filename:files.data},views=await read(directory,item),a=views.active.account;
-      insist(!accounts.has(a.steam_id),'Several datasets belong to the same account');accounts.add(a.steam_id);found.push({...item,account_id:a.steam_id,label:a.steam_user});
+      insist(!accounts.has(a.steam_id),'Several datasets belong to the same account');accounts.add(a.steam_id);found.push({...item,account_id:a.steam_id,label:a.steam_user,last_modified:views.dataLastModified});
     }
     return found.sort((a,b)=>a.label.localeCompare(b.label));
   }

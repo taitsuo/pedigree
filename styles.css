@@ -580,3 +580,7 @@ svg{display:block;min-width:100%;}
 
 #sendBreedingPairBtn:disabled, #saveChoicesBtn:disabled { opacity:.45; cursor:not-allowed; }
 #contextAvailability { flex-basis:100%; }
+
+#worldSelect option { color:var(--text,#d5d3bf); }
+#worldSelect.archived, #worldSelect option.archived, #worldState.archived { color:#ef7777; }
+[data-archive-disabled]:disabled, .advisor-alt[data-archive-disabled] { opacity:.45; cursor:not-allowed; }

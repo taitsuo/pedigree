@@ -35,7 +35,8 @@ globalThis.BTData=(()=>{
     validate(d);
     const w=d.worlds[key],u=copy(d.user_data.worlds[key]||{});
     const graph=u.graph||{preferences:{},annotations:{}};
-    graph.preferences=w?.storage_state==='archive'?{...graph.preferences}:{...copy(d.user_data.preferences||{}),...graph.preferences};
+    const globalPreferences=copy(d.user_data.preferences||{});delete globalPreferences.advisorGoals;
+    graph.preferences=w?.storage_state==='archive'?{...graph.preferences}:{...globalPreferences,...graph.preferences};
     graph.annotations=graph.annotations||{};
     const pets=Object.entries(w?.pets||{}).filter(([,p])=>p.lifecycle_state!=='TRACKED').map(([id,p])=>({
       ...p,bt_id:id,runtime_uid:p.current_uid,uid_history:p.uid_history||[],
@@ -91,13 +92,14 @@ globalThis.BTData=(()=>{
   function overlayPending(document,command){
     const out=copy(validate(document));
     if(command?.account_id!==out.account.steam_id||command?.action!=='user_patch'||!isObject(command.payload)||!Array.isArray(command.payload.ops))return out;
-    if(!out.worlds?.[command.payload.world])return out;
+    if(!out.worlds?.[command.payload.world]||out.worlds[command.payload.world].storage_state==='archive'||out.transport?.last_command?.command_id===command.command_id)return out;
     try{applyPendingOps(out.user_data,command.payload.ops)}catch{return out}
     return out;
   }
   async function submit(directory,dataset,world,value,path,onQueued=()=>{},additional=[],character=null){
     if(!directory)throw new Error('Connect the mod folder first');
-    if(!safePath(path)||path[0]!=='worlds'||path[1]!==world)throw new Error('Unsupported save target');
+    const allowed=p=>safePath(p)&&(p[0]==='worlds'&&p[1]===world||p.length===2&&p[0]==='preferences'&&p[1]==='advisorGoals');
+    if(!allowed(path))throw new Error('Unsupported save target');
     const permission=await directory.requestPermission({mode:'readwrite'});
     if(permission!=='granted')throw new Error('Folder permission required');
     if(!navigator.locks)throw new Error('This browser cannot coordinate saves. Use Chrome or Edge.');
@@ -105,7 +107,7 @@ globalThis.BTData=(()=>{
       const latestDocument=async()=>validate((await BTStores.read(directory,dataset)).active);
       const latest=await latestDocument();
       if(latest.account.steam_id!==dataset.account_id)throw new Error('Dataset account changed');
-      if(!latest.worlds[world])throw new Error('Archived World choices cannot be saved by the current Lua mailbox. Draft retained.');
+      if(!latest.worlds[world])throw new Error('Archived Worlds are read-only.');
       if(latest.transport?.protocol!==3)throw new Error('Breeding Tool transport protocol 3 required for saving.');
       const mailbox='BreedingTool.command.json';
       const readMailbox=async()=>{
@@ -131,7 +133,7 @@ globalThis.BTData=(()=>{
         try{applyPendingOps(pending,existing.payload.ops);mergedExisting=true}catch{}
       }
       setPath(pending,path,value);
-      for(const extra of additional){if(extra.path[0]!=='worlds'||extra.path[1]!==world)throw Error('Unsupported save target');setPath(pending,extra.path,extra.value)}
+      for(const extra of additional){if(!allowed(extra.path))throw Error('Unsupported save target');setPath(pending,extra.path,extra.value)}
       const isPairPath=p=>p?.[0]==='worlds'&&p[1]===world&&p[2]==='current_pair';
       const writesPair=isPairPath(path)||additional.some(e=>isPairPath(e.path));
       const ops=diff(latest.user_data,pending,[]);

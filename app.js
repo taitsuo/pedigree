@@ -227,7 +227,7 @@ function makeCollapsible(element,key,{keep=null,label='block',onChange=null}={})
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-expanded',String(!collapsed));
   };
-  button.onclick=event=>{event.stopPropagation();collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync();onChange?.(collapsedBlocks.get(key))};
+  button.onclick=event=>{event.stopPropagation();if(worldReadOnly())return;collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync();onChange?.(collapsedBlocks.get(key))};
   sync();
 }
 
@@ -245,13 +245,13 @@ function setupCommonPanel(element,id,keep,title){
   const advisor=id.startsWith('advisor-');
   const bucket=advisor?preferences.advisorCollapsed:preferences.panelCollapsed;
   collapsedBlocks.set(id,bucket[id]===true);
-  makeCollapsible(element,id,{keep,label:title,onChange:value=>{bucket[id]=value;savePreferences()}});
+  makeCollapsible(element,id,{keep,label:title,onChange:value=>{if(worldReadOnly())return;bucket[id]=value;savePreferences()}});
   const half=preferences.panelWidths[id]?preferences.panelWidths[id]==='half':advisor&&id!=='advisor-bloodlines';
   element.classList.toggle('panel-half',half);element.classList.toggle('panel-wide',!half);
   if(!element.querySelector(':scope > .panel-width')){
     const width=document.createElement('button');width.className='panel-width';width.type='button';
     width.textContent='↔';width.title='Toggle full / half width';width.setAttribute('aria-label',title+' width');
-    width.onclick=()=>{const half=element.classList.toggle('panel-half');element.classList.toggle('panel-wide',!half);preferences.panelWidths[id]=half?'half':'full';savePreferences()};
+    width.onclick=()=>{if(worldReadOnly())return;const half=element.classList.toggle('panel-half');element.classList.toggle('panel-wide',!half);preferences.panelWidths[id]=half?'half':'full';savePreferences()};
     element.append(width);
   }
 }
@@ -396,7 +396,6 @@ function normalizePreferences(value){
 
     customRoles:Array.isArray(value.customRoles)?value.customRoles:[],
     advisorStrategy:value.advisorStrategy==='progressive'?'progressive':'all-pairs',
-    advisorGoals:Object.fromEntries(Object.entries(value.advisorGoals||{}).filter(([,g])=>Array.isArray(g)&&g.length===7&&g.every(v=>['MAX','IGNORE'].includes(v)))),
     advisorPanelOrder:Array.isArray(value.advisorPanelOrder)?[...new Set(value.advisorPanelOrder.filter(id=>['advisor-offspring','advisor-candidates','advisor-bloodlines'].includes(id)))]:[],
     advisorCollapsed:value.advisorCollapsed&&typeof value.advisorCollapsed==='object'?{...value.advisorCollapsed}:{},
     panelCollapsed:{...(value.panelCollapsed||{})},
@@ -414,6 +413,7 @@ function normalizePreferences(value){
 const preferences=normalizePreferences({});
 
 function savePreferences(){
+  if(worldReadOnly())return;
   markUserDataDirty();
 }
 
@@ -425,6 +425,7 @@ function applyBlockOrder(){
 }
 
 function saveCurrentBlockOrder(){
+  if(worldReadOnly())return;
   const next=[...customizableBlocks.querySelectorAll(':scope > [data-block-id]')].map(block=>block.dataset.blockId);
   if(next.join('|')===normalizeBlockOrder(preferences.blockOrder).join('|'))return;
   preferences.blockOrder=next;
@@ -437,6 +438,7 @@ function initializeBlockOrdering(container=customizableBlocks,{apply=applyBlockO
   let dragged=null;
   container.querySelectorAll('.block-drag-handle').forEach(handle=>{
     handle.addEventListener('dragstart',event=>{
+      if(worldReadOnly()){event.preventDefault();return}
       dragged=handle.closest('[data-block-id]');
       dragged?.classList.add('block-dragging');
       event.dataTransfer.effectAllowed='move';
@@ -449,7 +451,7 @@ function initializeBlockOrdering(container=customizableBlocks,{apply=applyBlockO
     },{signal:controller.signal});
   });
   container.addEventListener('dragover',event=>{
-    if(!dragged)return;
+    if(!dragged||worldReadOnly())return;
     event.preventDefault();event.dataTransfer.dropEffect='move';
     const candidate=event.target.closest('[data-block-id]');
     const target=candidate?.parentElement===container?candidate:null;
@@ -476,7 +478,7 @@ function speciesKeys(){
   return allSpeciesKeys().filter(key=>!hidden.has(key));
 }
 
-function statGoals(speciesKey=currentSpecies){return preferences.advisorGoals[speciesKey]||(preferences.advisorGoals[speciesKey]=[...DEFAULT_STAT_GOALS])}
+function statGoals(speciesKey=currentSpecies){return accountGoalState()?.values[speciesKey]||[...DEFAULT_STAT_GOALS]}
 function qualityLabel(){return 'Useful genetic quality'}
 function qualityText(raw,speciesKey=currentSpecies){const p=GeneticQuality.prepare(statGoals(speciesKey));if(!p.maxRaw)return 'No selected stats';const percent=100*raw/p.maxRaw;return percent.toFixed(Number.isInteger(percent)?0:2)+' / 100'}
 function scoreSummary(n){return n.total7==null?'Incomplete stats':`Total: ${n.total7} / Quality: ${qualityText(n.qualityScore,nodeSpeciesKey(n))}`}
@@ -881,6 +883,7 @@ function activateCategory(descriptor){
 }
 
 function moveCategoryBefore(kind,source,target,speciesKey=currentSpecies){
+  if(worldReadOnly())return;
   if(!source||!target||source===target)return;
   const order=categoryDescriptors(kind,speciesKey).map(item=>item.key);
   const from=order.indexOf(source),to=order.indexOf(target);
@@ -893,6 +896,7 @@ function moveCategoryBefore(kind,source,target,speciesKey=currentSpecies){
 }
 
 function hideCategory(descriptor){
+  if(worldReadOnly())return;
   const wasActive=categoryIsActive(descriptor);
   const bucket=categoryBucket(descriptor.kind,descriptor.speciesKey);
   if(!bucket.manualHidden.includes(descriptor.key))bucket.manualHidden.push(descriptor.key);
@@ -910,6 +914,7 @@ function hideCategory(descriptor){
 }
 
 function restoreCategory(descriptor){
+  if(worldReadOnly())return;
   const bucket=categoryBucket(descriptor.kind,descriptor.speciesKey);
   bucket.manualHidden=bucket.manualHidden.filter(key=>key!==descriptor.key);
   savePreferences();
@@ -933,6 +938,7 @@ function renderCategoryZone(kind,tabsEl,hiddenEl){
     item.style.setProperty('--category-color',categoryColor(descriptor));
     item.title=`Drag to reorder ${kind} categories`;
     item.addEventListener('dragstart',event=>{
+      if(worldReadOnly()){event.preventDefault();return}
       draggedCategory={kind,key:descriptor.key,speciesKey:descriptor.speciesKey};
       item.classList.add('dragging');
       event.dataTransfer.effectAllowed='move';
@@ -1066,7 +1072,7 @@ function openPetLineage(pet,foundation=null){
   if(!pet)return;
   currentSpecies=nodeSpeciesKey(pet);
   selected=pet.id;
-  if(foundation){
+  if(foundation&&!worldReadOnly()){
     if(!pet.breedingActive)hideInactive=false;
     const bucket=categoryBucket('foundation',currentSpecies);
     const wasHidden=bucket.manualHidden.includes(String(foundation.key));
@@ -1106,7 +1112,7 @@ advisorBtn.addEventListener('click',()=>switchToolView('advisor'));
 
 inactiveToggleBtn.addEventListener('click',()=>{
   hideInactive=!hideInactive;
-  preferences.hideInactive=hideInactive;savePreferences();
+  if(!worldReadOnly()){preferences.hideInactive=hideInactive;savePreferences()}
   updateCategoryNavigation();render();refreshSelectedDetail();
 });
 
@@ -1200,17 +1206,44 @@ function currentPairResult(f,m){
   if(currentPairResults.size>=128)currentPairResults.delete(currentPairResults.keys().next().value);currentPairResults.set(key,result);currentPairJob=null;return result;
  }catch(error){currentPairJob={key,error:error.message};return null}
 }
+// Account-level edits survive World navigation without entering World drafts.
+const accountGoals=new Map();
 const CONTEXT_KEY='breeding-advisor-context-v1';
-const contextChoices=(()=>{try{const x=JSON.parse(localStorage.getItem(CONTEXT_KEY));return x&&typeof x.accounts==='object'&&x.accounts?x:{accounts:{}}}catch{return {accounts:{}}}})();
+function rememberedAccount(){try{return JSON.parse(localStorage.getItem(CONTEXT_KEY))?.account}catch{return null}}
+function rememberAccountSelection(){if(selectedDataset)try{localStorage.setItem(CONTEXT_KEY,JSON.stringify({account:selectedDataset.account_id}))}catch(e){console.warn('Could not remember selected Account:',e)}}
+function chooseInitialDataset(datasets){
+ const dated=datasets.filter(d=>Number.isFinite(d.last_modified)&&d.last_modified>=0).sort((a,b)=>b.last_modified-a.last_modified||a.account_id.localeCompare(b.account_id));
+ if(dated.length){accountSelect.title='Default Account: most recently modified BT_data file (practical indicator, not historical proof). Equal dates use Account ID order.';return dated[0]}
+ accountSelect.title='File modification dates unavailable: browser preference or deterministic fallback; recency is unknown.';
+ return datasets.find(d=>d.account_id===rememberedAccount())||datasets[0]||null;
+}
+function normalizedGoals(value){return Object.fromEntries(Object.entries(value||{}).filter(([,g])=>Array.isArray(g)&&g.length===7&&g.every(v=>v==='MAX'||v==='IGNORE')).map(([key,g])=>[key,[...g]]))}
+function accountGoalState(){return accountGoals.get(BTView.document?.account?.steam_id)}
+function hydrateAccountGoals(document,persisted){
+ const id=document.account.steam_id,saved=normalizedGoals(persisted.user_data.preferences.advisorGoals),visible=normalizedGoals(document.user_data.preferences.advisorGoals);
+ let state=accountGoals.get(id);
+ if(!state){state={values:visible,dirty:!BTData.same(saved,visible)};accountGoals.set(id,state)}
+ else if(state.dirty){if(BTData.same(state.values,saved))state.dirty=false}
+ else{state.values=visible;state.dirty=!BTData.same(saved,visible)}
+}
+function updateSaveIndicator(){
+ const dirty=userDataDirty||accountGoalState()?.dirty;
+ if(saveChoicesBtn){saveChoicesBtn.textContent=dirty?'Save choices *':'Save choices';saveChoicesBtn.classList.toggle('active',!!dirty)}
+}
+function worldReadOnly(){return BTView.document?.worlds[BTView.world]?.storage_state==='archive'}
+function applyReadOnlyControls(){
+ const readonly=worldReadOnly();
+ const selectors='[data-detail-field],#saveDetailBtn,#detailAddRoleBtn,[data-field],[data-reactivate],[data-advisor-stat],[data-ranking-strategy],[data-advisor-candidate-side],#setBreedingSelectionBtn,#recommendPairBtn,#clearBreedingPairBtn,#cancelCommandBtn,#reloadChoicesBtn,.category-hide,.restore-category,.panel-width,.collapse-toggle';
+ document.querySelectorAll(selectors).forEach(el=>{
+   if(readonly){if(!el.hasAttribute('data-archive-disabled')){el.dataset.archiveDisabled=String(el.disabled===true);el.disabled=true}el.setAttribute('aria-disabled','true')}
+   else if(el.hasAttribute('data-archive-disabled')){el.disabled=el.dataset.archiveDisabled==='true';delete el.dataset.archiveDisabled;el.removeAttribute('aria-disabled')}
+ });
+ document.querySelectorAll('.block-drag-handle,.category-item').forEach(el=>{el.draggable=!readonly});
+}
+
 function sameCharacter(a,b){return !!a&&!!b&&Number.isInteger(a.slot)&&a.slot>=0&&typeof a.name==='string'&&!!a.name.trim()&&a.name.trim()!=='None'&&a.slot===b.slot&&a.name===b.name}
 function knownCharacters(){return BTView.document?.extensions?.characters||[]}
 function selectedCharacter(){return knownCharacters().find(c=>sameCharacter(c,BTView.character))||null}
-function rememberContext(){
- const account=BTView.document?.account?.steam_id;if(!account)return;
- const c=selectedCharacter();contextChoices.account=account;
- contextChoices.accounts[account]={world:BTView.world,character:c?{slot:c.slot,name:c.name}:null};
- try{localStorage.setItem(CONTEXT_KEY,JSON.stringify(contextChoices))}catch(e){console.warn('Could not remember selected context:',e)}
-}
 function advisorCharacterBonus(){const c=selectedCharacter();return c&&Number.isFinite(c.mutation_bonus_pct)?c.mutation_bonus_pct:null}
 function sendContextReason(){
  const d=BTView.document;
@@ -1386,6 +1419,7 @@ function renderManuallyInactive(){
   panel.querySelectorAll('[data-manual-inspect]').forEach(button=>button.onclick=()=>{const n=petByPersistentUid(button.dataset.manualInspect);if(n)selectPet(n.id)});
   panel.querySelectorAll('[data-reactivate]').forEach(button=>button.onclick=()=>{
     const n=petByPersistentUid(button.dataset.reactivate);if(!n||automaticInactiveReason(n))return;
+    if(worldReadOnly())return;
     const edits=loadBoardEdits(),key=boardKey(n);edits[key]={...edits[key],breedingActive:true};saveBoardEdits(edits);applyBoardEdits();updateCategoryNavigation();renderBreedingTable();if(selected===n.id)refreshSelectedDetail();renderBreedingPairPanel();
   });
 }
@@ -1416,11 +1450,12 @@ function renderAdvisorControls(){
     const next=advisorStatMask(),i=Number(button.dataset.advisorStat);
     next[i]=next[i]==='MAX'?'IGNORE':'MAX';
 
-    preferences.advisorGoals[currentSpecies]=next;recomputeQualityScores();savePreferences();
+    if(worldReadOnly()||!accountGoalState())return;
+    accountGoalState().values[currentSpecies]=next;accountGoalState().dirty=true;recomputeQualityScores();updateSaveIndicator();
     refreshStatGoals();
   });
   advisorModelNote.textContent=GeneticQuality.prepare(advisorStatMask()).maxRaw?'':'No selected stats: recommendations and quality previews are unavailable.';
-  renderAdvisorStatReference();
+  renderAdvisorStatReference();applyReadOnlyControls();
   const warning=document.getElementById('advisorMutationWarning');
   warning.hidden=advisorCharacterBonus()!==0;
   warning.textContent='Character genetics bonus: 0%';
@@ -1467,7 +1502,7 @@ function organizeAdvisorPanels(markup){
   const applyOrder=()=>{order.forEach((id,i)=>{const p=advisorContent.querySelector(`[data-block-id="${id}"]`);if(p&&advisorContent.children[i]!==p)advisorContent.insertBefore(p,advisorContent.children[i]||null)})};
   if(!advisorContent.blockOrderingController)initializeBlockOrdering(advisorContent,{
     apply:applyOrder,
-    save:()=>{preferences.advisorPanelOrder=[...advisorContent.children].map(p=>p.dataset.blockId);savePreferences()}
+    save:()=>{if(worldReadOnly())return;preferences.advisorPanelOrder=[...advisorContent.children].map(p=>p.dataset.blockId);savePreferences()}
   });
   if(!advisorContent.querySelector('.block-dragging'))applyOrder();
   restoreAdvisorDetails();
@@ -1497,7 +1532,7 @@ function renderAdvisor(){
  const scope=advisorPairs(),{femaleGroups,maleGroups,pairs,pending,warning,error}=scope;renderBreedingPairPanel();
  countText.textContent=femaleGroups.reduce((s,g)=>s+g.pets.length,0)+' eligible females · '+maleGroups.reduce((s,g)=>s+g.pets.length,0)+' eligible males · '+scope.rawPairs.length+' pairs';
  const strategyHtml='<div class="advisor-strategy" role="group" aria-label="Ranking strategy">Strategy: '+[['all-pairs','All Pairs'],['progressive','Progressive']].map(([id,label])=>'<button type="button" data-ranking-strategy="'+id+'" aria-pressed="'+(preferences.advisorStrategy===id)+'">'+label+'</button>').join('')+'</div>';
- if(!pairs.length){organizeAdvisorPanels('<div class="advisor-alternatives">'+strategyHtml+'<p role="status">'+esc(error||(pending?'Calculating deterministic recommendations…':warning||'No eligible pair.'))+'</p></div>');bindStrategy();return}
+ if(!pairs.length){organizeAdvisorPanels('<div class="advisor-alternatives">'+strategyHtml+'<p role="status">'+esc(error||(pending?'Calculating deterministic recommendations…':warning||'No eligible pair.'))+'</p></div>');bindStrategy();applyReadOnlyControls();return}
  const selectedRaw=scope.rawPairs.find(p=>p.female.bt_id===breedingPanel.female_bt_id&&p.male.bt_id===breedingPanel.male_bt_id);
  const chosen=selectedRaw?{...selectedRaw,...currentPairResult(selectedRaw.female,selectedRaw.male)}:{...pairs[0],...currentPairResult(pairs[0].female,pairs[0].male)};
  advisorState.chosenPairKey=chosen.key;
@@ -1511,7 +1546,7 @@ function renderAdvisor(){
  }
  const columns=['female','male'].map(side=>{const list=scope.catalogs[side];return '<div class="advisor-candidate-group"><div class="advisor-candidate-group-head '+side+'">'+(side==='female'?'♀ Best females':'♂ Best males')+'</div><div class="advisor-alt-list">'+list.slice(0,3).map((e,i)=>candidateRows(e,i,side)).join('')+'</div><details class="candidate-catalog"><summary>Other eligible '+side+'s</summary>'+list.slice(3).map((e,i)=>candidateRows(e,i+3,side)).join('')+'</details></div>'}).join('');
  const markup='<div role="status" class="small">'+esc(warning||'Ranked by expected quality on selected stats / 100. Budgets use all seven stats / 60.')+'</div><div class="advisor-primary"><div class="advisor-result"><div class="advisor-rank">'+(selectedRaw?'Selected pair':'Recommended pair')+'</div><div class="small">Average Quality</div><div class="advisor-score">'+pairDisplay(chosen).average_quality+'</div>'+advisorProbabilityHtml(chosen)+'</div></div>'+advisorOffspringPreviewHtml(chosen)+'<div class="bloodline-result">'+bloodlinePredictionHtml(chosen)+'</div><div class="advisor-alternatives">'+strategyHtml+'<div class="advisor-alternatives-head"><strong>Top candidates</strong><span>Select a breeder to replace only that side of Current Pair.</span></div><div class="advisor-candidate-columns">'+columns+'</div></div>';
- organizeAdvisorPanels(markup);bindStrategy();
+ organizeAdvisorPanels(markup);bindStrategy();applyReadOnlyControls();
  advisorContent.querySelectorAll('[data-advisor-candidate-side]').forEach(button=>{
   button.onkeydown=e=>{if(e.target===button&&['Enter',' '].includes(e.key)){e.preventDefault();button.click()}};
   button.onclick=()=>{const side=button.dataset.advisorCandidateSide,pet=petByPersistentUid(button.dataset.advisorUid);if(!pet||breederAssignmentBlockReason(pet))return;
@@ -1521,7 +1556,7 @@ function renderAdvisor(){
  advisorContent.querySelectorAll('[data-load-partner]').forEach(button=>button.onclick=event=>{event.stopPropagation();const side=button.dataset.partnerSide,entry=scope.catalogs[side].find(e=>e.key===button.dataset.loadPartner);loadSecondaryPartner(scope,entry,side).catch(error=>{setPairStatus(error.message)})});
  advisorContent.querySelectorAll('[data-select-pet]').forEach(button=>button.onclick=()=>selectPet(button.dataset.selectPet));
  advisorContent.querySelectorAll('[data-preview]').forEach(button=>button.onclick=()=>{advisorState.preview=button.dataset.preview;renderAdvisor()});
- function bindStrategy(){advisorContent.querySelectorAll('[data-ranking-strategy]').forEach(button=>button.onclick=()=>{preferences.advisorStrategy=button.dataset.rankingStrategy;savePreferences();renderAdvisor()})}
+ function bindStrategy(){advisorContent.querySelectorAll('[data-ranking-strategy]').forEach(button=>button.onclick=()=>{if(worldReadOnly())return;preferences.advisorStrategy=button.dataset.rankingStrategy;savePreferences();renderAdvisor()})}
 }
 
 function render({selectFirst=false}={}){
@@ -1689,6 +1724,7 @@ function renderSelectedDetail(id){
     </div>`;
   detail.querySelectorAll('[data-id]').forEach(b=>b.addEventListener('click',()=>jumpToNode(b.dataset.id)));
   const saveDetail=()=>{
+    if(worldReadOnly())return;
     const edits=loadBoardEdits(), key=boardKey(n);
     edits[key]=edits[key]||{};
     detail.querySelectorAll('[data-detail-field]').forEach(el=>{
@@ -1704,6 +1740,7 @@ function renderSelectedDetail(id){
     return draft!==saved;
   });
   const syncDetailSaveButton=()=>{
+    if(worldReadOnly())return;
     const button=document.getElementById('saveDetailBtn');
     const changed=detailDraftChanged();
     if(changed)detailDrafts.set(draftKey(id),Object.fromEntries([...detail.querySelectorAll('[data-detail-field]')].map(el=>[el.dataset.detailField,el.value])));
@@ -1715,8 +1752,8 @@ function renderSelectedDetail(id){
   document.getElementById('saveDetailBtn').addEventListener('click',saveDetail);
   detail.querySelectorAll('[data-detail-field]').forEach(el=>el.addEventListener(el.matches('select')?'change':'input',syncDetailSaveButton));
   const retainedDraft=detailDrafts.get(draftKey(id));
-  if(retainedDraft)detail.querySelectorAll('[data-detail-field]').forEach(el=>{if(Object.hasOwn(retainedDraft,el.dataset.detailField))el.value=retainedDraft[el.dataset.detailField]});
-  syncDetailSaveButton();
+  if(retainedDraft&&!worldReadOnly())detail.querySelectorAll('[data-detail-field]').forEach(el=>{if(Object.hasOwn(retainedDraft,el.dataset.detailField))el.value=retainedDraft[el.dataset.detailField]});
+  syncDetailSaveButton();applyReadOnlyControls();
   if(focusState){
     const input=detail.querySelector('[data-detail-field="'+focusState.field+'"]');
     if(input){input.focus({preventScroll:true});if(typeof input.setSelectionRange==='function'&&focusState.start!==null)input.setSelectionRange(focusState.start,focusState.end)}
@@ -1802,6 +1839,7 @@ function loadBoardEdits(){
   return boardEdits;
 }
 function saveBoardEdits(edits){
+  if(worldReadOnly())return;
   boardEdits=normalizeBoardEdits(edits);
   markUserDataDirty();
 }
@@ -1895,6 +1933,7 @@ function renderBreedingTable(){
     renderBreedingTable();
   }));
   const saveField=el=>{
+    if(worldReadOnly())return;
     const all=loadBoardEdits(), key=el.dataset.key, field=el.dataset.field;
     const value=field==='breedingActive'?el.value==='true':el.value;
     all[key]=all[key]||{}; all[key][field]=value; saveBoardEdits(all); applyBoardEdits();
@@ -1902,13 +1941,14 @@ function renderBreedingTable(){
   };
   breedingTable.querySelectorAll('input[data-field]').forEach(el=>el.addEventListener('input',()=>saveField(el)));
   breedingTable.querySelectorAll('select[data-field]').forEach(el=>el.addEventListener('change',()=>saveField(el)));
-  renderManuallyInactive();
+  renderManuallyInactive();applyReadOnlyControls();
   breedingTable.querySelectorAll('.open-node').forEach(b=>b.addEventListener('click',()=>{
     selectPet(b.dataset.id);
   }));
 }
 
 function promptAddRole(){
+  if(worldReadOnly())return;
   const value=prompt('New role name — 30 characters maximum (for example: Carrier, Breeder, Resource):','');
   const role=String(value||'').trim();
   if(!role)return;
@@ -1957,14 +1997,15 @@ function syncGraphUserData(){
   const root=currentPayload.user_data&&typeof currentPayload.user_data==='object'&&!Array.isArray(currentPayload.user_data)
     ? currentPayload.user_data:{};
   const existing=root.graph&&typeof root.graph==='object'&&!Array.isArray(root.graph)?root.graph:{};
-  root.graph={...existing,schema_version:2,preferences:{...JSON.parse(JSON.stringify(preferences)),navigation:{...existing.preferences?.navigation,...JSON.parse(JSON.stringify(preferences.navigation))}},annotations:encodedAnnotations()};
+  root.graph={...existing,schema_version:2,preferences:{...existing.preferences,...JSON.parse(JSON.stringify(preferences)),navigation:{...existing.preferences?.navigation,...JSON.parse(JSON.stringify(preferences.navigation))}},annotations:encodedAnnotations()};
   currentPayload.user_data=root;
 }
 
 function markUserDataDirty(){
+  if(worldReadOnly())return;
   userDataDirty=true;
   syncGraphUserData();
-  if(saveChoicesBtn){saveChoicesBtn.textContent='Save choices *';saveChoicesBtn.classList.add('active')}
+  updateSaveIndicator();
 }
 
 function hydrateGraphUserData(payload){
@@ -2016,6 +2057,7 @@ function breedingPairStatus(panel=breedingPanel){
 }
 
 function breederAssignmentBlockReason(n){
+  if(worldReadOnly())return 'Archived Worlds are read-only';
   if(n.stage!=='adult')return 'Only confirmed adults can be assigned';
   const uid=stablePetId(n.bt_id);
   if(uid===null)return 'A persistent BT_ID is required';
@@ -2037,7 +2079,7 @@ function renderBreedingPairPanel(){
   const f=petByPersistentUid(femaleUid),m=petByPersistentUid(maleUid);
   const pair=f&&m?currentPairResult(f,m):null;
   const p=breedingPanel.prediction;
-  const qualityHtml=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pairDisplay(pair).average_quality+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,preferences,selectedCharacter())?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+predictionDisplay(p).average_quality+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(GeneticQuality.prepare(statGoals(nodeSpeciesKey(f))).maxRaw?'Selected Character or individual bonus unavailable':'No selected stats'):'Select both parents')+'</div>';
+  const qualityHtml=pair?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+pairDisplay(pair).average_quality+'</div>'+advisorProbabilityHtml(pair)+'</div>':p&&BTView.document&&BTStores.predictionValid(BTView.document,BTView.world,breedingPanel,accountGoalState()?.values,selectedCharacter())?'<div class="advisor-result"><div class="advisor-rank">Selected pair</div><div class="small">Average Quality</div><div class="advisor-score">'+predictionDisplay(p).average_quality+'</div><div class="small">Probabilities unavailable until recalculation</div></div>':'<div class="pair-empty">Average Quality<br>'+((f&&m)?(GeneticQuality.prepare(statGoals(nodeSpeciesKey(f))).maxRaw?'Selected Character or individual bonus unavailable':'No selected stats'):'Select both parents')+'</div>';
   updateHtml(quality,qualityHtml);
   quality.dataset.context=context;
   nextFemaleName.textContent=femaleUid===null?'Not selected':selectedPetName(femaleUid);
@@ -2050,12 +2092,13 @@ function renderBreedingPairPanel(){
       card.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectPet(card.dataset.selectPet)}};
     });
   }
+  applyReadOnlyControls();
   if(breedingPairState.dataset.context!==pairStatusContext())setPairStatus(breedingPanelDirty?'Pending — not queued':'');
   const status=breedingPairStatus();
   const contextReason=sendContextReason();
   sendBreedingPairBtn.disabled=BTView.saving||!status.valid||!!contextReason;
   sendBreedingPairBtn.title=contextReason||status.reason||'Queue the current selection for BreedingTool';
-  document.getElementById('contextAvailability').textContent=BTView.document?.worlds[BTView.world]?.storage_state==='archive'?'Archived World: consultation and analysis available; durable saving unavailable. Drafts are kept during navigation.':contextReason||'Matches last recorded context. Lua verifies the live context when applying.';
+  document.getElementById('contextAvailability').textContent=BTView.document?.worlds[BTView.world]?.storage_state==='archive'?'ARCHIVED — Read only: consultation and analysis available; all editing disabled.':contextReason||'Matches last recorded context. Lua verifies the live context when applying.';
   saveChoicesBtn.disabled=BTView.saving||BTView.document?.worlds[BTView.world]?.storage_state==='archive';
   sendBreedingPairBtn.classList.toggle('active',status.valid&&breedingPanelDirty);
 }
@@ -2073,6 +2116,7 @@ function breedingSelectionButtonHtml(n){
 }
 
 function setBreedingSelection(n){
+  if(worldReadOnly())return;
   const uid=stablePetId(n.bt_id);
   if(breederAssignmentBlockReason(n))return;
   let activated=false;
@@ -2126,15 +2170,14 @@ function canonicalName(value){
 function numericUid(value){return stablePetId(value)}
 
 
-function applyCensus(document){
+function applyCensus(document,persisted=document){
   validateCensus(document);
   const accountChanged=BTView.document?.account?.steam_id!==document.account.steam_id;
   if(accountChanged){
     stashWorldDraft(); BTView.world=null; BTView.pinnedWorld=null; BTView.character=null;
     userDataDirty=false; breedingPanelDirty=false;
   }
-  const saved=contextChoices.accounts[document.account.steam_id];
-  const requested=BTView.pinnedWorld||saved?.world;
+  const requested=BTView.pinnedWorld;
   const nextWorld=requested&&document.worlds[requested]?requested:document.active_world||Object.keys(document.worlds)[0]||null;
   const entering=accountChanged||BTView.world!==nextWorld;
   if(entering){
@@ -2144,10 +2187,11 @@ function applyCensus(document){
     Object.assign(advisorState,{chosenPairKey:null});
     BTView.world=nextWorld;
   }
-  BTView.document=document;
+  BTView.document=document;BTView.persisted=persisted;
+  hydrateAccountGoals(document,persisted);
   const characters=knownCharacters();
-  BTView.character=[BTView.character,saved?.character,document.extensions?.active_character].map(wanted=>characters.find(c=>sameCharacter(c,wanted))).find(Boolean)||characters[0]||null;
-  rememberContext();
+  BTView.character=[BTView.character,document.extensions?.active_character].map(wanted=>characters.find(c=>sameCharacter(c,wanted))).find(Boolean)||characters[0]||null;
+  
   let payload=BTData.project(document,nextWorld);
   if(entering){
     const navigation=payload.user_data.graph.navigation;
@@ -2155,7 +2199,7 @@ function applyCensus(document){
     Object.assign(advisorState,restoredAdvisorState(payload.user_data.graph.advisor));
   }
   selected=BTData.resolve(document.worlds[nextWorld],selected);
-  const draft=BTView.drafts.get(draftKey(nextWorld));
+  const draft=worldReadOnly()?null:BTView.drafts.get(draftKey(nextWorld));
   if(draft&&!userDataDirty&&!breedingPanelDirty){
     hydrateGraphUserData(draft.payload); hydrateBreedingPanel(draft.payload);
     userDataDirty=draft.dirty; breedingPanelDirty=draft.pairDirty;
@@ -2165,6 +2209,9 @@ function applyCensus(document){
     BTView.base=draft.base; BTView.pairBase=draft.pairBase;
     BTView.drafts.delete(draftKey(nextWorld));
   }
+  if(worldReadOnly()){userDataDirty=false;breedingPanelDirty=false;boardEdits=null;}
+  const desiredGraph=entering?payload.user_data.graph:currentPayload?.user_data?.graph;
+  if(userDataDirty&&BTData.diff(persisted.user_data.worlds[nextWorld]?.graph,desiredGraph).length===0)userDataDirty=false;
   if(!userDataDirty)BTView.base=BTData.copy(document.user_data.worlds[nextWorld]?.graph||{});
   if(!breedingPanelDirty)BTView.pairBase=BTData.copy(document.user_data.worlds[nextWorld]?.current_pair||{});
   updateWorldControls();
@@ -2237,7 +2284,7 @@ function applyCensus(document){
   rebuildIndex();rebuildRelationshipIndexes();applyBoardEdits();rebuildNavigationCatalog();
   if(!speciesKeys().includes(currentSpecies))currentSpecies=defaultSpeciesKey();
   updateCategoryNavigation();render();renderBreedingPairPanel();
-  saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';saveChoicesBtn.classList.toggle('active',userDataDirty);
+  updateSaveIndicator();applyReadOnlyControls();
 }
 
 function openDirectoryDb(){
@@ -2325,11 +2372,11 @@ async function readDirectoryCommand(handle){
   }
 }
 
-const BTView={document:null,world:null,pinnedWorld:null,character:null,base:null,pairBase:null,drafts:new Map(),saving:false};
+const BTView={document:null,persisted:null,world:null,pinnedWorld:null,character:null,base:null,pairBase:null,drafts:new Map(),saving:false};
 const detailDrafts=new Map();
 function validateCensus(payload){BTData.validate(payload)}
 function stashWorldDraft(){
-  if(!currentPayload||!BTView.world)return;
+  if(!currentPayload||!BTView.world||worldReadOnly())return;
   if(userDataDirty)syncGraphUserData();
   const payload=BTData.copy(currentPayload);payload.breeding_panel=BTData.copy(breedingPanel);
   BTView.drafts.set(draftKey(BTView.world),{payload,base:BTData.copy(BTView.base),pairBase:BTData.copy(BTView.pairBase),
@@ -2348,26 +2395,28 @@ function updateWorldControls(){
   updateCharacterControl();
   const d=BTView.document,select=document.getElementById('worldSelect');
   select.replaceChildren();
-  for(const [key,w]of Object.entries(d.worlds))select.add(new Option((w.metadata.prospect_id||key)+(w.storage_state==='archive'?' (archived)':''),key));
+  for(const [key,w]of Object.entries(d.worlds)){const option=new Option((w.metadata.prospect_id||key)+(w.storage_state==='archive'?' — ARCHIVED':''),key);option.classList.toggle('archived',w.storage_state==='archive');select.add(option)}
+  select.classList.toggle('archived',worldReadOnly());
   select.value=BTView.world||'';
-  document.getElementById('worldState').textContent=d.worlds[BTView.world]?.metadata.prospect_id||'No recorded World';
+  const state=document.getElementById('worldState');state.classList.toggle('archived',worldReadOnly());state.textContent=(d.worlds[BTView.world]?.metadata.prospect_id||'No recorded World')+(worldReadOnly()?' — ARCHIVED · Read only':'');
 }
 document.getElementById('worldSelect').addEventListener('change',event=>{
   if(BTView.saving||refreshInFlight){updateWorldControls();return}
   BTView.pinnedWorld=event.target.value||null;
-  if(BTView.document)applyCensus(BTView.document);
+  if(BTView.document)applyCensus(BTView.document,BTView.persisted);
 });
 document.getElementById('characterSelect').addEventListener('change',event=>{
   if(BTView.saving||refreshInFlight){updateCharacterControl();return}
   const key=event.target.value;
   BTView.character=knownCharacters().find(c=>JSON.stringify([c.slot,c.name])===key)||null;
-  rememberContext();updateCharacterControl();render();renderBreedingPairPanel();refreshSelectedDetail();
+  updateCharacterControl();render();renderBreedingPairPanel();refreshSelectedDetail();
 });
 
 document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
-  if(BTView.saving)return;
-  if((userDataDirty||breedingPanelDirty)&&!confirm('Discard unsaved choices for this world and reload the saved version?'))return;
+  if(BTView.saving||worldReadOnly())return;
+  if((userDataDirty||accountGoalState()?.dirty||breedingPanelDirty)&&!confirm('Discard unsaved choices for this world and reload the saved version?'))return;
   BTView.drafts.delete(draftKey(BTView.world));userDataDirty=false;breedingPanelDirty=false;
+  if(accountGoalState()){accountGoalState().dirty=false;accountGoalState().values=normalizedGoals(BTView.persisted.user_data.preferences.advisorGoals)}
   for(const id of detailDrafts.keys())if(id.startsWith(draftKey(BTView.world)+':'))detailDrafts.delete(id);
   if(BTView.document)applyCensus(BTView.document);
   refreshJson(true);
@@ -2379,10 +2428,10 @@ function prepareCurrentPair(){
   if(status.complete){
     const result=currentPairResult(status.female,status.male);
     const prediction=result?advisorPairPrediction(result):null;
-    if(prediction&&BTStores.predictionValid(BTView.document,BTView.world,{...pair,prediction},preferences,selectedCharacter()))pair.prediction=prediction;
+    if(prediction&&BTStores.predictionValid(BTView.document,BTView.world,{...pair,prediction},accountGoalState()?.values,selectedCharacter()))pair.prediction=prediction;
   }
   const character=selectedCharacter();
-  return {pair,character:{slot:character.slot,name:character.name},additional:pair.prediction?[{path:['worlds',BTView.world,'graph','preferences','advisorGoals'],value:BTData.copy(preferences.advisorGoals)}]:[]};
+  return {pair,character:{slot:character.slot,name:character.name},additional:pair.prediction?[{path:['preferences','advisorGoals'],value:BTData.copy(accountGoalState().values)}]:[]};
 }
 function acceptQueuedPair(prepared,world,account){
   if(!prepared)return;
@@ -2411,7 +2460,7 @@ async function sendBreedingPanel(){
 async function saveChoices(){
   if(BTView.saving)throw new Error('A save is already in progress');
   if(!currentPayload||!BTView.world)throw new Error('Wait for a world first');
-  if(BTView.document.worlds[BTView.world]?.storage_state==='archive')throw new Error('Archived World choices cannot be saved by the current Lua mailbox. Draft retained.');
+  if(BTView.document.worlds[BTView.world]?.storage_state==='archive')throw new Error('Archived Worlds are read-only.');
   syncGraphUserData();
   const dataset=selectedDataset;
   if(!dataset||dataset.account_id!==BTView.document?.account?.steam_id)throw new Error('Select an account dataset first');
@@ -2419,19 +2468,22 @@ async function saveChoices(){
   submitted.navigation={species:currentSpecies,view:BTData.copy(activeView),selected};
   submitted.advisor=BTData.copy(advisorState);
   const additional=prepared?[{path:['worlds',world,'current_pair'],value:prepared.pair}]:[];
+  if(accountGoalState().dirty||prepared?.pair.prediction)additional.push({path:['preferences','advisorGoals'],value:BTData.copy(accountGoalState().values)});
   BTView.saving=true;saveChoicesBtn.disabled=true;
   try{
     const result=await BTData.submit(localDirectoryHandle,dataset,world,submitted,['worlds',world,'graph'],message=>importBadge.textContent=message,additional,prepared?.character);
     if(dataset.account_id===BTView.document?.account?.steam_id&&world===BTView.world){
       syncGraphUserData();
       const now=BTData.copy(currentPayload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;
-      userDataDirty=!BTData.same(now,submitted);BTView.base=submitted;
+      const unchanged=BTData.same(now,submitted);
+      if(unchanged)currentPayload.user_data.graph=BTData.copy(submitted);
+      userDataDirty=result.queued||!unchanged;BTView.base=submitted;
     }else{
       const draft=BTView.drafts.get(draftKey(world,dataset.account_id));
       if(draft){const now=BTData.copy(draft.payload.user_data.graph);now.navigation=submitted.navigation;now.advisor=submitted.advisor;draft.dirty=!BTData.same(now,submitted);draft.base=submitted}
     }
     acceptQueuedPair(prepared,world,dataset.account_id);
-    saveChoicesBtn.textContent=userDataDirty?'Save choices *':'Save choices';saveChoicesBtn.classList.toggle('active',userDataDirty);
+    updateSaveIndicator();
     importBadge.textContent=result?.queued?'Choices'+(prepared?' and selection':'')+' queued ✓ — apply with the mod':'Choices already current ✓';
     return result;
   }finally{BTView.saving=false;renderBreedingPairPanel()}
@@ -2456,7 +2508,7 @@ async function applyJsonText(text,source,force,commandText=null){
     if(commandText){
       try{command=JSON.parse(commandText);if(command.account_id!==persisted.account.steam_id)command=null;payload=BTData.overlayPending(persisted,command)}catch{}
     }
-    applyCensus(payload);
+    applyCensus(payload,persisted);
     lastLocalStateSignature=signature;
     const count=Object.values(payload.worlds?.[BTView.world]?.pets||{}).filter(p=>p.stage==='adult').length;
     const ops=command?.payload?.world===BTView.world&&Array.isArray(command?.payload?.ops)?command.payload.ops:[];
@@ -2472,6 +2524,7 @@ async function applyJsonText(text,source,force,commandText=null){
       const receipt=persisted.transport?.last_command;
       importBadge.textContent=receipt?.current_pair_status==='rejected_context'?'Current Pair rejected by Lua: live context differs. Valid choices were processed according to receipt status ('+receipt.status+').':`JSON ${source}: ${count} pets · ${force?'refreshed':'synced'} ${now}`;
       if(receipt?.current_pair_status==='rejected_context')setPairStatus('Current Pair rejected: live Account / World / Character differs.');
+      if(['conflict','invalid'].includes(receipt?.status))importBadge.textContent='Command not applied ('+receipt.status+'). Unsaved choices retained.';
     }
   }else if(commandText && JSON.parse(commandText)?.account_id===BTView.document?.account?.steam_id){
     importBadge.textContent='Changes queued ✓ — use Refresh in game to apply';
@@ -2492,7 +2545,7 @@ async function connectDirectory(){
       if(!datasets.length)throw new Error('No valid account datasets found');
       stashWorldDraft();
       localDirectoryHandle=chosen; availableDatasets=datasets;
-      selectedDataset=datasets.find(d=>d.account_id===contextChoices.account)||(datasets.length===1?datasets[0]:null);
+      selectedDataset=chooseInitialDataset(datasets);
       updateAccountControls();
       updateConnectionControls(); void rememberDirectory(chosen);
       if(!selectedDataset){importBadge.textContent='Select an account';return}
@@ -2538,7 +2591,7 @@ async function refreshJson(force=false){
     }
     if(!localDirectoryHandle||force){
       availableDatasets=await BTData.discover(handle);
-      selectedDataset=availableDatasets.find(d=>d.account_id===(selectedDataset?.account_id||contextChoices.account))||(availableDatasets.length===1?availableDatasets[0]:null);
+      selectedDataset=availableDatasets.find(d=>d.account_id===selectedDataset?.account_id)||chooseInitialDataset(availableDatasets);
       localDirectoryHandle=handle;updateAccountControls();updateConnectionControls();
     }
     if(!selectedDataset){importBadge.textContent=availableDatasets.length?'Select an account':'No valid account datasets found';return}
@@ -2583,11 +2636,12 @@ accountSelect.addEventListener('change',async()=>{
   if(refreshInFlight||BTView.saving){updateAccountControls();return}
   selectedDataset=availableDatasets.find(d=>d.filename===accountSelect.value)||null;
   renderBreedingPairPanel();
+  rememberAccountSelection();
   lastLocalStateSignature=null;
   await refreshJson();
 });
 document.getElementById('cancelCommandBtn').addEventListener('click',async()=>{
-  if(refreshInFlight||BTView.saving||!localDirectoryHandle||!selectedDataset)return;
+  if(refreshInFlight||BTView.saving||worldReadOnly()||!localDirectoryHandle||!selectedDataset)return;
   if(!confirm('Cancel the pending command for this account? Unsaved drafts are retained.'))return;
   try{await BTData.cancelPending(localDirectoryHandle,selectedDataset);await refreshJson(true)}
   catch(e){importBadge.textContent=e.message}
@@ -2677,12 +2731,14 @@ window.addEventListener('blur',hideTooltip);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hideTooltip()});
 document.getElementById('clearBtn').addEventListener('click',()=>{selected=null;selectedPetSummary.textContent='No pet selected';detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it. Hover a card for a quick summary.</div>';render()});
 document.getElementById('clearBreedingPairBtn').addEventListener('click',()=>{
+  if(worldReadOnly())return;
   breedingPanel={female_bt_id:null,male_bt_id:null};
   breedingPanelDirty=true;
   renderBreedingPairPanel();
   refreshSelectedDetail();
 });
 sendBreedingPairBtn.addEventListener('click',async()=>{
+  if(sendContextReason()||!breedingPairStatus().valid)return;
   try{
     sendBreedingPairBtn.disabled=true;
     setPairStatus('Queuing pair…');
@@ -2715,9 +2771,11 @@ document.addEventListener('click',inspectUidElement,true);
 document.addEventListener('keydown',inspectUidElement,true);
 
 document.getElementById('recommendPairBtn').addEventListener('click',async()=>{
+ if(worldReadOnly())return;
  const before=JSON.stringify([breedingPanel,breedingPanelDirty]);let scope=advisorPairs();
  if(scope.pending){const job=advisorPredictionJob;if(!job?.promise)return;switchToolView('advisor');await job.promise;if(advisorPredictionJob!==job||JSON.stringify([breedingPanel,breedingPanelDirty])!==before)return;scope=advisorPairs()}
  if(scope.pending||!scope.pairs.length)return;
+ if(worldReadOnly())return;
  const best=scope.pairs[0];breedingPanel={female_bt_id:best.female.bt_id,male_bt_id:best.male.bt_id,prediction:advisorPairPrediction(best)};breedingPanelDirty=true;advisorState.chosenPairKey=best.key;
  if(activeView.kind==='advisor')renderAdvisor();renderBreedingPairPanel();refreshSelectedDetail();
 });
