@@ -227,7 +227,7 @@ function makeCollapsible(element,key,{keep=null,label='block',onChange=null}={})
     button.setAttribute('aria-label',button.title);
     button.setAttribute('aria-expanded',String(!collapsed));
   };
-  button.onclick=event=>{event.stopPropagation();if(worldReadOnly())return;collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync();onChange?.(collapsedBlocks.get(key))};
+  button.onclick=event=>{event.stopPropagation();collapsedBlocks.set(key,collapsedBlocks.get(key)!==true);sync();onChange?.(collapsedBlocks.get(key))};
   sync();
 }
 
@@ -438,7 +438,6 @@ function initializeBlockOrdering(container=customizableBlocks,{apply=applyBlockO
   let dragged=null;
   container.querySelectorAll('.block-drag-handle').forEach(handle=>{
     handle.addEventListener('dragstart',event=>{
-      if(worldReadOnly()){event.preventDefault();return}
       dragged=handle.closest('[data-block-id]');
       dragged?.classList.add('block-dragging');
       event.dataTransfer.effectAllowed='move';
@@ -446,12 +445,12 @@ function initializeBlockOrdering(container=customizableBlocks,{apply=applyBlockO
     },{signal:controller.signal});
     handle.addEventListener('dragend',()=>{
       container.querySelectorAll('.movable-block').forEach(block=>block.classList.remove('block-dragging','block-drop-target'));
-      if(dragged)save();
+      if(dragged&&!worldReadOnly())save();
       dragged=null;
     },{signal:controller.signal});
   });
   container.addEventListener('dragover',event=>{
-    if(!dragged||worldReadOnly())return;
+    if(!dragged)return;
     event.preventDefault();event.dataTransfer.dropEffect='move';
     const candidate=event.target.closest('[data-block-id]');
     const target=candidate?.parentElement===container?candidate:null;
@@ -1233,21 +1232,31 @@ function updateSaveIndicator(){
 function worldReadOnly(){return BTView.document?.worlds[BTView.world]?.storage_state==='archive'}
 function applyReadOnlyControls(){
  const readonly=worldReadOnly();
- const selectors='[data-detail-field],#saveDetailBtn,#detailAddRoleBtn,[data-field],[data-reactivate],[data-advisor-stat],[data-ranking-strategy],[data-advisor-candidate-side],#setBreedingSelectionBtn,#recommendPairBtn,#clearBreedingPairBtn,#cancelCommandBtn,#reloadChoicesBtn,.category-hide,.restore-category,.panel-width,.collapse-toggle';
+ const selectors='[data-detail-field],#saveDetailBtn,#detailAddRoleBtn,[data-field],[data-reactivate],[data-advisor-stat],[data-ranking-strategy],[data-advisor-candidate-side],#setBreedingSelectionBtn,#recommendPairBtn,#clearBreedingPairBtn,#cancelCommandBtn,#reloadChoicesBtn,.category-hide,.restore-category,.panel-width';
  document.querySelectorAll(selectors).forEach(el=>{
    if(readonly){if(!el.hasAttribute('data-archive-disabled')){el.dataset.archiveDisabled=String(el.disabled===true);el.disabled=true}el.setAttribute('aria-disabled','true')}
    else if(el.hasAttribute('data-archive-disabled')){el.disabled=el.dataset.archiveDisabled==='true';delete el.dataset.archiveDisabled;el.removeAttribute('aria-disabled')}
  });
- document.querySelectorAll('.block-drag-handle,.category-item').forEach(el=>{el.draggable=!readonly});
+ document.querySelectorAll('.block-drag-handle').forEach(el=>{el.draggable=true});
+ document.querySelectorAll('.category-item').forEach(el=>{el.draggable=!readonly});
 }
 
 function sameCharacter(a,b){return !!a&&!!b&&Number.isInteger(a.slot)&&a.slot>=0&&typeof a.name==='string'&&!!a.name.trim()&&a.name.trim()!=='None'&&a.slot===b.slot&&a.name===b.name}
 function knownCharacters(){return BTView.document?.extensions?.characters||[]}
 function selectedCharacter(){return knownCharacters().find(c=>sameCharacter(c,BTView.character))||null}
 function advisorCharacterBonus(){const c=selectedCharacter();return c&&Number.isFinite(c.mutation_bonus_pct)?c.mutation_bonus_pct:null}
+function contextDivergence(){
+ const d=BTView.document,latest=availableDatasets.length?chooseInitialDataset(availableDatasets):selectedDataset;
+ if(!d)return '';
+ if(latest&&latest.account_id!==d.account.steam_id)return 'Account differs from the last active Account (BT_data modification date).';
+ if(BTView.world!==d.active_world)return 'World differs from the last recorded active World.';
+ if(!sameCharacter(selectedCharacter(),d.extensions?.active_character))return 'Character differs from the last recorded active Character (slot + name).';
+ return '';
+}
 function sendContextReason(){
  const d=BTView.document;
  if(!d||!selectedDataset||selectedDataset.account_id!==d.account.steam_id)return 'Select the connected Account to send.';
+ if(contextDivergence())return 'Send unavailable: '+contextDivergence();
  if(BTView.world!==d.active_world||d.worlds[BTView.world]?.storage_state==='archive')return 'Send unavailable: selected World differs from the last recorded active World.';
  if(!sameCharacter(selectedCharacter(),d.extensions?.active_character))return 'Send unavailable: selected Character differs from the last recorded active Character (slot + name).';
  return '';
@@ -2098,7 +2107,10 @@ function renderBreedingPairPanel(){
   const contextReason=sendContextReason();
   sendBreedingPairBtn.disabled=BTView.saving||!status.valid||!!contextReason;
   sendBreedingPairBtn.title=contextReason||status.reason||'Queue the current selection for BreedingTool';
-  document.getElementById('contextAvailability').textContent=BTView.document?.worlds[BTView.world]?.storage_state==='archive'?'ARCHIVED — Read only: consultation and analysis available; all editing disabled.':contextReason||'Matches last recorded context. Lua verifies the live context when applying.';
+  const warning=document.getElementById('contextAvailability'),divergence=contextDivergence();
+  warning.classList.toggle('context-divergent',!!divergence);
+  warning.textContent=divergence+(worldReadOnly()?(divergence?' · ':'')+'ARCHIVED — Read only: consultation and analysis available.':divergence?'':'Matches last recorded context. Lua verifies the live context when applying.');
+  const switchButton=document.getElementById('switchLastActiveBtn');switchButton.hidden=!divergence;switchButton.disabled=BTView.saving;
   saveChoicesBtn.disabled=BTView.saving||BTView.document?.worlds[BTView.world]?.storage_state==='archive';
   sendBreedingPairBtn.classList.toggle('active',status.valid&&breedingPanelDirty);
 }
@@ -2186,6 +2198,7 @@ function applyCensus(document,persisted=document){
     selected=null; currentSpecies=''; activeView={kind:'species',key:null};
     Object.assign(advisorState,{chosenPairKey:null});
     BTView.world=nextWorld;
+    BTView.pinnedWorld=nextWorld;
   }
   BTView.document=document;BTView.persisted=persisted;
   hydrateAccountGoals(document,persisted);
@@ -2284,6 +2297,8 @@ function applyCensus(document,persisted=document){
   rebuildIndex();rebuildRelationshipIndexes();applyBoardEdits();rebuildNavigationCatalog();
   if(!speciesKeys().includes(currentSpecies))currentSpecies=defaultSpeciesKey();
   updateCategoryNavigation();render();renderBreedingPairPanel();
+  selected=byId.has(selected)?selected:null;
+  if(selected)refreshSelectedDetail();else{selectedPetSummary.textContent='No pet selected';detail.innerHTML='<div class="detail-placeholder">Select a pet to inspect and annotate it.</div>'}
   updateSaveIndicator();applyReadOnlyControls();
 }
 
@@ -2410,6 +2425,7 @@ document.getElementById('characterSelect').addEventListener('change',event=>{
   const key=event.target.value;
   BTView.character=knownCharacters().find(c=>JSON.stringify([c.slot,c.name])===key)||null;
   updateCharacterControl();render();renderBreedingPairPanel();refreshSelectedDetail();
+  refreshRecordedPairPrediction().catch(error=>setPairStatus('Prediction not queued: '+error.message));
 });
 
 document.getElementById('reloadChoicesBtn').addEventListener('click',()=>{
@@ -2433,6 +2449,34 @@ function prepareCurrentPair(){
   const character=selectedCharacter();
   return {pair,character:{slot:character.slot,name:character.name},additional:pair.prediction?[{path:['preferences','advisorGoals'],value:BTData.copy(accountGoalState().values)}]:[]};
 }
+async function refreshRecordedPairPrediction(){
+ if(BTView.saving||refreshInFlight||sendContextReason()||worldReadOnly()||!localDirectoryHandle)return;
+ const world=BTView.world,stored=BTView.persisted?.user_data.worlds[world]?.current_pair,character=selectedCharacter();
+ if(!stored?.female_bt_id||!stored?.male_bt_id||!stored.prediction)return;
+ const matches=p=>p?.female_bt_id===stored.female_bt_id&&p?.male_bt_id===stored.male_bt_id;
+ if(!matches(breedingPanel)||!BTData.same(accountGoalState()?.values,normalizedGoals(BTView.persisted.user_data.preferences.advisorGoals)))return;
+ if(!BTStores.predictionValid(BTView.document,world,stored,accountGoalState().values,character))return;
+ const prepared=prepareCurrentPair();
+ if(!prepared?.pair.prediction||!matches(prepared.pair))return;
+ BTView.saving=true;
+ try{
+  const result=await BTData.submit(localDirectoryHandle,selectedDataset,world,prepared.pair.prediction,['worlds',world,'current_pair','prediction'],()=>{},[],prepared.character,stored);
+  if(result.queued)setPairStatus('Prediction queued ✓ — Current Pair unchanged');
+  return result;
+ }finally{BTView.saving=false;renderBreedingPairPanel()}
+}
+document.getElementById('switchLastActiveBtn').addEventListener('click',async()=>{
+ if(BTView.saving||refreshInFlight||!contextDivergence())return;
+ const target=availableDatasets.length?chooseInitialDataset(availableDatasets):selectedDataset;
+ if(!target)return;
+ if(target.account_id!==BTView.document?.account?.steam_id){
+  selectedDataset=target;updateAccountControls();rememberAccountSelection();lastLocalStateSignature=null;await refreshJson();
+ }else{
+  BTView.pinnedWorld=BTView.document.active_world;
+  BTView.character=BTView.document.extensions?.active_character||null;
+  applyCensus(BTView.document,BTView.persisted);
+ }
+});
 function acceptQueuedPair(prepared,world,account){
   if(!prepared)return;
   const sameSelection=p=>p.female_bt_id===prepared.pair.female_bt_id&&p.male_bt_id===prepared.pair.male_bt_id;

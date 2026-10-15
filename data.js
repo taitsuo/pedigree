@@ -96,7 +96,7 @@ globalThis.BTData=(()=>{
     try{applyPendingOps(out.user_data,command.payload.ops)}catch{return out}
     return out;
   }
-  async function submit(directory,dataset,world,value,path,onQueued=()=>{},additional=[],character=null){
+  async function submit(directory,dataset,world,value,path,onQueued=()=>{},additional=[],character=null,expectedPair=null){
     if(!directory)throw new Error('Connect the mod folder first');
     const allowed=p=>safePath(p)&&(p[0]==='worlds'&&p[1]===world||p.length===2&&p[0]==='preferences'&&p[1]==='advisorGoals');
     if(!allowed(path))throw new Error('Unsupported save target');
@@ -131,6 +131,14 @@ globalThis.BTData=(()=>{
           if(had!==(op.had===true)||had&&!same(node[op.path.at(-1)],op.before))throw new Error('Pending command conflicts with updated choices. Apply or cancel it first.');
         }
         try{applyPendingOps(pending,existing.payload.ops);mergedExisting=true}catch{}
+      }
+      if(expectedPair){
+        const matches=p=>p?.female_bt_id===expectedPair.female_bt_id&&p?.male_bt_id===expectedPair.male_bt_id;
+        if(!matches(latest.user_data.worlds[world]?.current_pair)||!matches(pending.worlds[world]?.current_pair))throw new Error('Current Pair changed; prediction not queued');
+        const active=latest.extensions?.active_character,current=latest.user_data.worlds[world]?.current_pair;
+        if(latest.active_world!==world||active?.slot!==character?.slot||active?.name!==character?.name
+          ||!BTStores.predictionValid(latest,world,current,undefined,active)
+          ||!BTStores.predictionValid({...latest,user_data:pending},world,{...current,prediction:value},undefined,active))throw new Error('Prediction context changed; not queued');
       }
       setPath(pending,path,value);
       for(const extra of additional){if(!allowed(extra.path))throw Error('Unsupported save target');setPath(pending,extra.path,extra.value)}
