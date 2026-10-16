@@ -1193,7 +1193,6 @@ function advisorCandidateGroups(breeders,sex){
 const advisorPredictionEngine=AdvisorRanking.create();
 let advisorPredictionJob=null;
 const advisorPredictionCache=new Map(),currentPairResults=new Map(),secondaryPartners=new Map();
-let currentPairJob=null;
 function preparedPair(pair){return {...pair,female:{...pair.female,bonus:individualMutationBonus(pair.female)},male:{...pair.male,bonus:individualMutationBonus(pair.male)}}}
 function currentPairKey(f,m){return JSON.stringify([selectedDataset?.account_id,BTView.world,PairScoring.version,f.bt_id,m.bt_id,f.stats,m.stats,individualMutationBonus(f),individualMutationBonus(m),advisorCharacterBonus(),statGoals(nodeSpeciesKey(f)),PairScoring.config])}
 function currentPairResult(f,m){
@@ -1202,8 +1201,8 @@ function currentPairResult(f,m){
  const key=currentPairKey(f,m);if(currentPairResults.has(key))return currentPairResults.get(key);
  const pair={key:f.bt_id+'::'+m.bt_id,female:f,male:m};
  try{const prediction=PairScoring.evaluate(PairScoring.input(preparedPair(pair),advisorCharacterBonus()),statGoals(nodeSpeciesKey(f))),result={...pair,prediction,score:prediction.average,provisional:false};
-  if(currentPairResults.size>=128)currentPairResults.delete(currentPairResults.keys().next().value);currentPairResults.set(key,result);currentPairJob=null;return result;
- }catch(error){currentPairJob={key,error:error.message};return null}
+  if(currentPairResults.size>=128)currentPairResults.delete(currentPairResults.keys().next().value);currentPairResults.set(key,result);return result;
+ }catch{return null}
 }
 // Account-level edits survive World navigation without entering World drafts.
 const accountGoals=new Map();
@@ -2148,7 +2147,7 @@ function setBreedingSelection(n){
   breedingPanelDirty=true;
   renderBreedingPairPanel();
   if(activated){updateCategoryNavigation();render()}
-  else if(activeView.kind==='advisor')renderAdvisor();else renderBreedingPairPanel();
+  else if(activeView.kind==='advisor')renderAdvisor();
   renderSelectedDetail(n.id);
 }
 let selectedDataset=null;
