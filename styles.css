@@ -579,7 +579,7 @@ svg{display:block;min-width:100%;}
 .pair-common-stats{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center;margin:10px 0}.pair-common-stats>div{display:flex;flex-direction:column;gap:4px}.pair-common-stats span{color:var(--muted,#aaa58f)}.pair-common-stats strong{font-size:1.15rem}
 
 #sendBreedingPairBtn:disabled, #saveChoicesBtn:disabled { opacity:.45; cursor:not-allowed; }
-#contextAvailability { flex-basis:100%; }
+#contextAvailability:empty, #worldState:empty { display:none; }
 
 #worldSelect option { color:var(--text,#d5d3bf); }
 #worldSelect.archived, #worldSelect option.archived, #worldState.archived { color:#ef7777; }
