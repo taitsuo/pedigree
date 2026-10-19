@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Breeding Tool — V1.0.1</title>
+<title>Breeding Tool — V1.0.2</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="ui-p3.css">
 </head>
@@ -11,7 +11,7 @@
 <div class="app" id="app">
 <header>
   <div>
-    <h1>Breeding Tool <span class="version">V1.0.1</span></h1>
+    <h1>Breeding Tool <span class="version">V1.0.2</span></h1>
     <div class="subtitle">Local pedigrees and breeding tools generated from your local pet data.</div>
     <div class="theme-picker" role="group" aria-label="Theme">
       <span class="theme-label">Theme:</span>
@@ -108,7 +108,7 @@
           <h2>Advisor</h2>
           <p>Deterministic next-generation useful quality. Select a breeder to change only that side of Current Pair.</p>
         </div>
-        <span class="advisor-prototype-badge">Native predictions · V1.0.1</span>
+        <span class="advisor-prototype-badge">Native predictions · V1.0.2</span>
       </div>
       <div id="advisorSettings" hidden><div class="advisor-config-grid">
         <div class="advisor-config-main">
@@ -153,7 +153,7 @@
 </div>
 <div class="footer">Local data only. Automatic refresh: 5 seconds after folder access is granted. Genetics order: V/F/P/R/T/A/I.</div>
 </div>
-<div class="tooltip" id="tooltip"></div>
+<div class="tooltip" id="tooltip" role="tooltip"></div>
 <input id="jsonFileFallback" type="file" accept="application/json,.json" hidden>
 
 <script src="stores.js"></script>
